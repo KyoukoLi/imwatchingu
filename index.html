@@ -56,6 +56,41 @@ body{font-family:-apple-system,"PingFang SC","HarmonyOS Sans SC","Microsoft YaHe
 .btn.ghost{background:none;text-align:center;color:var(--txt2)}
 .btn:disabled{opacity:.38;cursor:not-allowed}
 .btn:disabled:active{transform:none}
+/* ---------- choice panel：可点区域与叙事流明确区分 ---------- */
+.choices{background:var(--bg2);border:1px solid var(--line);border-left:3px solid var(--pink);border-radius:14px;padding:12px 12px 4px;margin-bottom:12px}
+.choices .ctitle{font-size:11.5px;color:var(--txt3);letter-spacing:1.5px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.choices .ctitle::after{content:"";flex:1;height:1px;background:var(--line)}
+.choices .btn{position:relative;padding-right:30px}
+.choices .btn:not(:disabled)::after{content:"›";position:absolute;right:13px;top:50%;transform:translateY(-50%);color:var(--txt3);font-size:16px}
+.choices .btn.primary:not(:disabled)::after{color:var(--pink)}
+.cgroup{font-size:10.5px;color:var(--txt3);letter-spacing:1px;margin:10px 2px 7px;display:flex;align-items:center;gap:8px}
+.cgroup::before,.cgroup::after{content:"";flex:1;height:1px;background:var(--line)}
+.btn .lock{color:var(--gold);font-style:normal}
+.doneline{font-size:11.5px;color:var(--txt3);padding:4px 2px 9px}
+.doneline b{color:var(--txt2);font-weight:600}
+/* 你的选择回执 */
+.receipt{display:flex;justify-content:flex-end;margin:2px 0 12px}
+.receipt span{max-width:85%;background:var(--pink-dim);border:1px solid var(--pink);color:var(--txt);border-radius:12px 4px 12px 12px;padding:7px 12px;font-size:13px;line-height:1.5}
+/* 已读内容弱化 */
+.past{opacity:.5;transition:opacity .4s}
+/* 素材入库卡 */
+.gaincard{display:flex;gap:11px;align-items:center;background:linear-gradient(90deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:13px;padding:11px 13px;margin-bottom:12px}
+.gaincard .gicon{flex:none;width:42px;height:42px;border-radius:11px;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:20px}
+.gaincard .ginfo{flex:1;min-width:0}
+.gaincard .gname{font-size:13.5px;font-weight:600}
+.gaincard .gmeta{font-size:11px;color:var(--txt3);margin-top:2px}
+.gaincard.glv4{border-color:var(--gold)} .gaincard.glv5{border-color:var(--red)}
+/* 顶栏数值脉冲与飘字 */
+@keyframes statpulse{0%{transform:scale(1)}35%{transform:scale(1.25)}100%{transform:scale(1)}}
+#sb-stats b.pulse-up{animation:statpulse .5s;color:var(--green)}
+#sb-stats b.pulse-down{animation:statpulse .5s;color:var(--red)}
+#statfloats{position:absolute;top:34px;right:12px;z-index:40;pointer-events:none;display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.sfloat{font-size:12px;font-weight:700;padding:2px 9px;border-radius:99px;background:#000a;animation:sfloat 1.4s ease forwards}
+.sfloat.up{color:var(--green)} .sfloat.down{color:var(--red)}
+@keyframes sfloat{0%{opacity:0;transform:translateY(6px)}15%{opacity:1;transform:none}75%{opacity:1}100%{opacity:0;transform:translateY(-10px)}}
+/* 底部「有新选项」提示 */
+#morehint{position:absolute;bottom:calc(64px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:30;background:var(--pink);color:#fff;font-size:11.5px;padding:6px 14px;border-radius:99px;box-shadow:0 4px 14px #0008;cursor:pointer;display:none;animation:fadein .3s}
+#morehint.show{display:block}
 .pillrow{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .pill{font-size:11px;padding:3px 9px;border-radius:99px;background:var(--card2);border:1px solid var(--line);color:var(--txt2)}
 .pill.hot{color:var(--pink);border-color:var(--pink)}
@@ -154,7 +189,9 @@ body{font-family:-apple-system,"PingFang SC","HarmonyOS Sans SC","Microsoft YaHe
     </div>
     <div id="riskwrap">风险<div id="riskbar"><div id="riskfill"></div></div><span id="risknum">0 / 100</span></div>
   </div>
+  <div id="statfloats"></div>
   <div id="screen"></div>
+  <div id="morehint">⌄ 下滑查看选项</div>
   <div id="tabbar" style="display:none">
     <button class="tab on" data-tab="today"><span class="ti">🌃</span>今日<span class="dot" id="dot-today"></span></button>
     <button class="tab" data-tab="group"><span class="ti">💬</span>粉群<span class="dot" id="dot-group"></span></button>
@@ -341,18 +378,48 @@ function itemPrice(item){
 }
 
 // ---------------- stat changes ----------------
+// 顶栏即时反馈：数值脉冲 + 飘字
+function statFloat(txt,up){
+  const box=$("#statfloats"); if(!box)return;
+  const el=document.createElement("div");
+  el.className="sfloat "+(up?"up":"down"); el.textContent=txt;
+  box.appendChild(el);
+  setTimeout(()=>el.remove(),1450);
+  while(box.children.length>4)box.firstChild.remove();
+}
+function pulseStat(sel,up){
+  const el=$(sel); if(!el)return;
+  el.classList.remove("pulse-up","pulse-down");
+  void el.offsetWidth;
+  el.classList.add(up?"pulse-up":"pulse-down");
+  setTimeout(()=>el.classList.remove("pulse-up","pulse-down"),600);
+}
 // 资金永不为负：扣费时最多扣到 0（兜里只有这么多）
 function addMoney(n){
   const before=S.money;
   S.money=Math.max(0,S.money+n);
   if(n>0)S.stats.earned+=n;
   else S.stats.spent+=before-S.money;
+  const d=S.money-before;
+  if(d!==0){statFloat((d>0?"+":"-")+"¥"+fmt(Math.abs(d)),d>0);pulseStat("#sb-money",d>0);}
   refreshBar();
 }
-function addRisk(n){S.risk=clamp(S.risk+n,0,100);S.stats.maxRisk=Math.max(S.stats.maxRisk,S.risk);refreshBar();}
+function addRisk(n){
+  const before=S.risk;
+  S.risk=clamp(S.risk+n,0,100);S.stats.maxRisk=Math.max(S.stats.maxRisk,S.risk);
+  const d=S.risk-before;
+  if(Math.abs(d)>=3)statFloat("风险 "+(d>0?"+":"")+d,d<0);
+  refreshBar();
+}
 function addChenlun(n){S.chenlun=clamp(S.chenlun+n,0,100);}
 function addFame(n){S.fame=clamp(S.fame+n,0,100);refreshBar();}
-function addEnergy(n){S.energy=clamp(S.energy+n,0,100);refreshBar();}
+function addEnergy(n){
+  const before=S.energy;
+  S.energy=clamp(S.energy+n,0,100);
+  const d=S.energy-before;
+  if(d!==0){statFloat("体力 "+(d>0?"+":"")+d,d>0);pulseStat("#sb-en",d>0);}
+  refreshBar();
+}
 function addImp(n){
   const before=impLevel(); S.impXP+=n; const after=impLevel();
   S.impression=after;
@@ -362,6 +429,15 @@ function gainItem(lv,name,desc){
   if(lv===2&&S.gear&&chance(0.35)){lv=3;name+="·长焦版";}
   const it={id:S.invSeq++,lv,name,desc,day:S.day};
   S.inventory.push(it); S.stats.shots++; S.itemsToday++; S.dryDays=0;
+  // 素材入库卡：核心正反馈，要有仪式感
+  const info=LV_INFO[lv];
+  const card=document.createElement("div");
+  card.className="gaincard fade"+(lv>=5?" glv5":lv>=4?" glv4":"");
+  card.innerHTML='<div class="gicon">'+info.icon+'</div><div class="ginfo">'
+    +'<div class="gname">'+esc(name)+'</div>'
+    +'<div class="gmeta"><span class="lv'+lv+'">Lv'+lv+' '+info.n+'</span> · 参考价 ¥'+fmt(itemPrice(it))+' · 已存入相册</div>'
+    +'</div><div style="font-size:11px;color:var(--txt3)">📷</div>';
+  pushBlock(card);
   if(lv>=4)S.flags.everLv4=true;
   if(S.commission&&!S.commission.done&&lv>=S.commission.lv&&S.commission.day===S.day){
     S.commission.done=true; addMoney(S.commission.reward); addFame(2);
@@ -410,10 +486,12 @@ document.querySelectorAll(".tab").forEach(btn=>{
 function renderTab(){
   const sc=$("#screen"); sc.scrollTop=0;
   if(curTab==="today"){sc.innerHTML="";sc.appendChild(todayEl);
-    if(anchorEl)requestAnimationFrame(()=>{scrollToEl(anchorEl);});
-    else requestAnimationFrame(()=>{sc.scrollTop=sc.scrollHeight;});
+    if(anchorEl)requestAnimationFrame(()=>{scrollToEl(anchorEl);updateMoreHint();});
+    else requestAnimationFrame(()=>{sc.scrollTop=sc.scrollHeight;updateMoreHint();});
+    return;
   }
-  else if(curTab==="group")renderGroup(sc);
+  $("#morehint").classList.remove("show");
+  if(curTab==="group")renderGroup(sc);
   else if(curTab==="feed")renderFeed(sc);
   else if(curTab==="album")renderAlbum(sc);
   else renderMine(sc);
@@ -458,37 +536,77 @@ function pushDelta(lines){
 }
 
 let choiceBox=null;
-function showChoices(choices,qte){
+function showChoices(choices,qte,title){
   removeChoices();
-  choiceBox=document.createElement("div"); choiceBox.className="fade";
+  choiceBox=document.createElement("div"); choiceBox.className="choices fade";
+  const t=document.createElement("div"); t.className="ctitle";
+  t.textContent=title||"❯ 你的选择"; choiceBox.appendChild(t);
   if(qte){
     const q=document.createElement("div"); q.id="qtewrap";
     q.innerHTML='<div class="qtelabel">⚠ 快速反应 ⚠</div><div id="qtebar"><div id="qtefill" style="animation:qte '+qte.seconds+'s linear forwards"></div></div>';
     choiceBox.appendChild(q);
-    qteTimer=setTimeout(()=>{ const c=choices[qte.timeoutIndex]; pushSys("你愣住了，没来得及反应"); takeChoice(c); },qte.seconds*1000);
+    qteTimer=setTimeout(()=>{ pushSys("你愣住了，没来得及反应"); takeChoice(choices[qte.timeoutIndex]); },qte.seconds*1000);
   }
   for(const c of choices){
-    const b=document.createElement("button"); b.className="btn"+(c.primary?" primary":"");
-    b.innerHTML=esc(c.label)+(c.sub?'<span class="sub">'+esc(c.sub)+"</span>":"");
+    if(c.divider!==undefined){
+      const d=document.createElement("div"); d.className="cgroup"; d.textContent=c.divider;
+      choiceBox.appendChild(d); continue;
+    }
+    if(c.done!==undefined){
+      const d=document.createElement("div"); d.className="doneline"; d.innerHTML="✓ <b>"+esc(c.done)+"</b>"+(c.doneSub?" · "+esc(c.doneSub):"");
+      choiceBox.appendChild(d); continue;
+    }
+    const b=document.createElement("button"); b.className="btn"+(c.primary?" primary":"")+(c.ghost?" ghost":"");
+    let subHtml=c.sub?esc(c.sub):"";
+    if(c.disabled&&c.lock)subHtml='<span class="lock">⛔ '+esc(c.lock)+'</span>'+(c.sub?' · '+esc(c.sub):"");
+    b.innerHTML=esc(c.label)+(subHtml?'<span class="sub">'+subHtml+"</span>":"");
     if(c.disabled){b.disabled=true;}
     else b.onclick=()=>takeChoice(c);
     choiceBox.appendChild(b);
   }
   todayEl.appendChild(choiceBox);
-  // 选项不强制滚动：保持玩家在锚点位置阅读，自己滑下来选
+  // 选项不强制滚动：保持玩家在锚点位置阅读；选项在屏幕外时给出提示
   if(curTab==="today"&&!anchorEl){
     const sc=$("#screen");
     requestAnimationFrame(()=>{sc.scrollTop=sc.scrollHeight;});
   }
+  requestAnimationFrame(updateMoreHint);
+}
+// 把已读内容压暗，让「现在」一目了然
+function dimPast(){
+  for(const ch of todayEl.children)ch.classList.add("past");
+}
+function pushReceipt(label){
+  const d=document.createElement("div");
+  d.className="receipt"; d.innerHTML="<span>"+esc(label)+"</span>";
+  pushBlock(d);
 }
 function takeChoice(c){
   if(sceneLock)return; sceneLock=true;
   if(qteTimer){clearTimeout(qteTimer);qteTimer=null;}
   removeChoices();
+  dimPast();
   anchorNext=true; anchorEl=null;
+  if(!c.silent)pushReceipt(c.label);
   setTimeout(()=>{sceneLock=false; c.fn&&c.fn();},60);
 }
-function removeChoices(){ if(choiceBox){choiceBox.remove();choiceBox=null;} }
+function removeChoices(){ if(choiceBox){choiceBox.remove();choiceBox=null;} updateMoreHint(); }
+// 「下滑查看选项」浮动提示
+function updateMoreHint(){
+  const hint=$("#morehint"); if(!hint)return;
+  let show=false;
+  if(choiceBox&&curTab==="today"&&!S?.ended){
+    const sc=$("#screen");
+    const r=choiceBox.getBoundingClientRect(), sr=sc.getBoundingClientRect();
+    if(r.top>sr.bottom-60)show=true;
+  }
+  hint.classList.toggle("show",show);
+}
+$("#morehint").onclick=()=>{
+  if(choiceBox)scrollToEl(choiceBox);
+  $("#morehint").classList.remove("show");
+};
+$("#screen").addEventListener("scroll",()=>requestAnimationFrame(updateMoreHint),{passive:true});
 
 // ===================================================
 //                     DAY CYCLE
@@ -738,6 +856,24 @@ function genIntel(){
 function intelFor(t){return S.intel.find(x=>x.type===t);}
 
 // ---------------- action menu ----------------
+// 锁定原因：让玩家一眼知道按钮为什么灰着
+function lockReason(checks){
+  for(const[cond,msg]of checks)if(cond)return msg;
+  return "";
+}
+function endDayAct(extraSub){
+  // 收工提示：还有没用掉的资源时给出醒目提醒
+  const unused=S.away?0:S.intel.filter(i=>i.bought&&!i.used).length;
+  let warn="";
+  if(unused>0)warn="还有 "+unused+" 条行程没跑！";
+  else if(S.energy>=30)warn="体力还剩 "+S.energy+"，打零工也是钱";
+  return {label:"🌙 收工，今天到此为止",
+    sub:(warn?"⚠ "+warn+" · ":"")+(extraSub||"直接进入日结"),fn:()=>endDay()};
+}
+function callMomAct(){
+  return {label:"📞 给妈妈打电话",sub:"开口要钱（第 "+((S.momCalls||0)+1)+" 次）"+((S.momCalls||0)>=2?" · 你知道这次意味着什么":" · +¥2,000"),
+    fn:()=>actCallMom()};
+}
 function actionMenu(){
   if(S.ended)return;
   const acts=[];
@@ -748,64 +884,87 @@ function actionMenu(){
     const lastDay=p.phase==="trip"&&p.idx===p.len-1;
     if(lastDay){
       acts.push({label:"✈️ 跟他同班机回程",sub:"-¥1,500 · 体力30 · 机舱里又是三个小时",
-        disabled:S.money<1500||S.energy<30, primary:true, fn:()=>actFollowReturn()});
+        disabled:S.money<1500||S.energy<30, lock:lockReason([[S.money<1500,"资金不足（需 ¥1,500）"],[S.energy<30,"体力不足（需 30）"]]),
+        primary:true, fn:()=>actFollowReturn()});
     }
-    acts.push({label:"🏨 外地酒店蹲守",sub:"-¥300 · 外地没人跟你抢机位 · 夜间行动，会花掉一整天",
-      disabled:S.money<300||S.energy<35, fn:()=>actAwayHotel()});
-    acts.push({label:"🎬 外地录制围观",sub:"-¥150 · 体力30 · 本地粉丝少，好卡位"+(S.awayShotToday?" · 今天已经去过了":""),
-      disabled:S.awayShotToday||S.money<150||S.energy<30, fn:()=>actAwayShoot()});
-    acts.push({label:"🏠 提前回家",sub:"-¥1,200 · 不等他了",disabled:S.money<1200,fn:()=>actGoHome()});
-    if(S.money<800)acts.push({label:"📞 给妈妈打电话",sub:"开口要钱（第 "+((S.momCalls||0)+1)+" 次）"+((S.momCalls||0)>=2?" · 你知道这次意味着什么":" · +¥2,000"),
-      fn:()=>actCallMom()});
+    acts.push({label:"🏨 外地酒店蹲守",sub:"-¥300 · 体力35 · 夜间行动，会花掉一整天",
+      disabled:S.money<300||S.energy<35, lock:lockReason([[S.money<300,"资金不足（需 ¥300）"],[S.energy<35,"体力不足（需 35）"]]),
+      fn:()=>actAwayHotel()});
+    if(S.awayShotToday)acts.push({done:"外地录制围观",doneSub:"今天已经去过了"});
+    else acts.push({label:"🎬 外地录制围观",sub:"-¥150 · 体力30 · 本地粉丝少，好卡位",
+      disabled:S.money<150||S.energy<30, lock:lockReason([[S.money<150,"资金不足（需 ¥150）"],[S.energy<30,"体力不足（需 30）"]]),
+      fn:()=>actAwayShoot()});
+    acts.push({divider:"过日子"});
+    acts.push({label:"🏠 提前回家",sub:"-¥1,200 · 不等他了",disabled:S.money<1200,lock:S.money<1200?"资金不足（需 ¥1,200）":"",fn:()=>actGoHome()});
+    if(S.money<800)acts.push(callMomAct());
     acts.push({label:"🛏️ 在旅馆躺一天",sub:"风险-8 · 外地的天花板也挺好看",fn:()=>actRest()});
-    acts.push({label:"🌙 收工，今天到此为止",sub:"直接进入日结（外地住宿 -¥250/晚）",fn:()=>endDay()});
-    return showChoices(acts);
+    acts.push({divider:"结束今天"});
+    acts.push(endDayAct("进入日结（外地住宿 -¥250/晚）"));
+    return showChoices(acts,null,"📋 外地 · "+esc(S.awayCity)+" · 今天怎么过");
   }
 
   // ---------- 本市模式 ----------
   for(const it of S.intel){
-    if(!it.bought)acts.push({label:"💴 买线报："+it.title,sub:"花费 ¥"+it.cost+" · 收费线报准度更高",
-      disabled:S.money<it.cost,
+    if(!it.bought)acts.push({label:"💴 买线报："+it.title,sub:"花费 ¥"+it.cost+" · 买下后解锁对应行动，准度更高",
+      disabled:S.money<it.cost, lock:S.money<it.cost?"资金不足（需 ¥"+it.cost+"）":"",
       fn(){ addMoney(-it.cost); it.bought=true; pushSys("你转了 ¥"+it.cost+"，对方发来完整行程截图"); actionMenu(); }});
   }
   const air=intelFor("airport"),hot=intelFor("hotel"),stu=intelFor("studio"),show=intelFor("show"),con=intelFor("concert");
-  const note=(it,miss)=>!it?miss:it.used?" · 这条行程今天已经用过了":"";
+  const pushIntelAct=(it,doneName,opt)=>{
+    if(it.used){acts.push({done:doneName,doneSub:"这条行程今天已经跑过了"});return;}
+    acts.push(opt);
+  };
 
   if(air&&air.sub==="dep"){
-    acts.push({label:"✈️ 跟机去"+p.city,sub:"机票约¥1500起 · 跟过去就是好几天的远征 · 高风险高回报"+note(air,""),
-      disabled:!air.bought||air.used||S.energy<50||S.money<1500, fn:()=>actFlight(air)});
-    acts.push({label:"🧳 出发厅外围蹲点",sub:"体力25 · 花费¥100 · 拍出发图，不跟过去"+note(air,""),
-      disabled:air.used||S.energy<25||S.money<100, fn:()=>actAirportOuter(air,"dep")});
+    pushIntelAct(air,"跟机/出发厅蹲点",{label:"✈️ 跟机去"+p.city,sub:"机票约¥1,500起 · 体力50 · 跟过去就是好几天的远征",
+      disabled:!air.bought||air.used||S.energy<50||S.money<1500,
+      lock:lockReason([[!air.bought,"需先买这条线报"],[S.energy<50,"体力不足（需 50）"],[S.money<1500,"资金不足（需 ¥1,500）"]]),
+      fn:()=>actFlight(air)});
+    if(!air.used)acts.push({label:"🧳 出发厅外围蹲点",sub:"体力25 · 花费¥100 · 拍出发图，不跟过去",
+      disabled:S.energy<25||S.money<100, lock:lockReason([[S.energy<25,"体力不足（需 25）"],[S.money<100,"资金不足（需 ¥100）"]]),
+      fn:()=>actAirportOuter(air,"dep")});
   }else if(air&&air.sub==="arr"){
-    acts.push({label:"🧳 到达口接机蹲点",sub:"体力25 · 花费¥100 · 接机口永远是修罗场"+note(air,""),
-      disabled:air.used||S.energy<25||S.money<100, fn:()=>actAirportOuter(air,"arr")});
+    pushIntelAct(air,"到达口接机",{label:"🧳 到达口接机蹲点",sub:"体力25 · 花费¥100 · 接机口永远是修罗场",
+      disabled:air.used||S.energy<25||S.money<100,
+      lock:lockReason([[S.energy<25,"体力不足（需 25）"],[S.money<100,"资金不足（需 ¥100）"]]),
+      fn:()=>actAirportOuter(air,"arr")});
   }
   if(p.phase==="trip"&&p.idx>0&&p.idx<p.len-1){
     acts.push({label:"🛫 飞去"+p.city+"追行程",sub:"-¥1,800 · 体力40 · 中途加入远征，今晚就能蹲酒店",
-      disabled:S.money<1800||S.energy<40, fn:()=>actMidTrip(p.city)});
+      disabled:S.money<1800||S.energy<40, lock:lockReason([[S.money<1800,"资金不足（需 ¥1,800）"],[S.energy<40,"体力不足（需 40）"]]),
+      fn:()=>actMidTrip(p.city)});
   }
-  if(hot)acts.push({label:"🏨 酒店蹲守",sub:"花费¥400 · 夜间行动，会蹲到天亮 · 可能空军也可能是大货"+note(hot,""),
-    disabled:!hot.bought||hot.used||S.energy<35||S.money<400, fn:()=>actHotel(hot)});
+  if(hot)pushIntelAct(hot,"酒店蹲守",{label:"🏨 酒店蹲守",sub:"花费¥400 · 体力35 · 夜间行动，可能空军也可能是大货",
+    disabled:!hot.bought||hot.used||S.energy<35||S.money<400,
+    lock:lockReason([[!hot.bought,"需先买这条线报"],[S.energy<35,"体力不足（需 35）"],[S.money<400,"资金不足（需 ¥400）"]]),
+    fn:()=>actHotel(hot)});
   if(stu){
     const lbl=stu.sub==="practice"?"🏢 公司楼下蹲守":"🎬 录制点堵截";
-    acts.push({label:lbl,sub:"体力40 · 花费¥200 · 可能撞见队内秘密"+note(stu,""),
-      disabled:!stu.bought||stu.used||S.energy<40||S.money<200, fn:()=>actStudio(stu)});
+    pushIntelAct(stu,lbl.slice(3),{label:lbl,sub:"体力40 · 花费¥200 · 可能撞见队内秘密",
+      disabled:!stu.bought||stu.used||S.energy<40||S.money<200,
+      lock:lockReason([[!stu.bought,"需先买这条线报"],[S.energy<40,"体力不足（需 40）"],[S.money<200,"资金不足（需 ¥200）"]]),
+      fn:()=>actStudio(stu)});
   }
-  if(show)acts.push({label:"🎤 公演/晚会蹲守",sub:"体力35 · 花费¥150 · 新歌期的图最好卖"+note(show,""),
-    disabled:!show.bought||show.used||S.energy<35||S.money<150, fn:()=>actShow(show)});
+  if(show)pushIntelAct(show,"公演/晚会蹲守",{label:"🎤 公演/晚会蹲守",sub:"体力35 · 花费¥150 · 新歌期的图最好卖",
+    disabled:!show.bought||show.used||S.energy<35||S.money<150,
+    lock:lockReason([[!show.bought,"需先买这条线报"],[S.energy<35,"体力不足（需 35）"],[S.money<150,"资金不足（需 ¥150）"]]),
+    fn:()=>actShow(show)});
   if(con&&!con.used)acts.push({label:"🎤 演唱会！",sub:"一年里最大的行情日 · 场外或场内，看你的胆子和钱包",
-    disabled:S.energy<40, primary:true, fn:()=>actConcert(con)});
+    disabled:S.energy<40, lock:S.energy<40?"体力不足（需 40）":"", primary:true, fn:()=>actConcert(con)});
   if(S.flags.signingOpen||S.extraSigning){
     acts.push({label:"🖊️ 去签售会（合法名额）",sub:"体力30 · 花费¥800 · 唯一能光明正大靠近他的机会 · 一天一次",
-      disabled:S.energy<30||S.money<800, primary:true, fn:()=>actSigning()});
+      disabled:S.energy<30||S.money<800, lock:lockReason([[S.energy<30,"体力不足（需 30）"],[S.money<800,"资金不足（需 ¥800）"]]),
+      primary:true, fn:()=>actSigning()});
   }
+  if(!S.intel.length&&acts.length===0)acts.push({done:"今天没有任何行程流出",doneSub:"打工回血或休息，都是体面的选择"});
+  acts.push({divider:"过日子"});
   acts.push({label:"💼 打零工",sub:"体力30 · 收入+¥300 · 风险悄悄降一点",
-    disabled:S.energy<30, fn:()=>actWork()});
-  if(S.money<800)acts.push({label:"📞 给妈妈打电话",sub:"开口要钱（第 "+((S.momCalls||0)+1)+" 次）"+((S.momCalls||0)>=2?" · 你知道这次意味着什么":" · +¥2,000"),
-    fn:()=>actCallMom()});
+    disabled:S.energy<30, lock:S.energy<30?"体力不足（需 30）":"", fn:()=>actWork()});
+  if(S.money<800)acts.push(callMomAct());
   acts.push({label:"🛏️ 今天彻底休息",sub:"不做任何事 · 风险-8 · 心也能静一静",fn:()=>actRest()});
-  acts.push({label:"🌙 收工，今天到此为止",sub:"直接进入日结",fn:()=>endDay()});
-  showChoices(acts);
+  acts.push({divider:"结束今天"});
+  acts.push(endDayAct());
+  showChoices(acts,null,"📋 今天怎么安排");
 }
 
 function afterAction(deltas){
@@ -931,7 +1090,7 @@ function flightLand(){
   if(postFaceEscalate())return;
   S.away=true; S.awayCity=city;
   pushNarr('🧳 你在他们酒店两条街外找了家便宜旅馆住下。<b>远征开始了</b>——他在'+esc(city)+'的每一天，你都在。<br><span class="hint">（外地期间住宿 ¥250/晚，自动结算）</span>');
-  pushDelta(['<span class="gd">远征模式：'+esc(city)+'</span>','<span class="up">素材入库（见相册）</span>']);
+  pushDelta(['<span class="gd">远征模式：'+esc(city)+'</span>']);
   save(); endDay();
 }
 
@@ -1215,7 +1374,7 @@ function actStudio(intel){
 }
 function finStudio(){
   if(postFaceEscalate())return;
-  afterAction(deltaLine(['<span class="down">体力 -40 · -¥200</span>','<span class="up">素材入库</span>']));
+  afterAction(deltaLine(['<span class="down">体力 -40 · -¥200</span>']));
 }
 
 // ---- 公演/晚会（新歌期） ----
@@ -1886,10 +2045,11 @@ function daySummary(lodging){
     +'<div class="sumrow"><span class="k">库存素材</span><span>'+S.inventory.length+' 份（记得去相册卖，会掉新鲜度）</span></div>'
     +(lodging?'<div class="sumrow"><span class="k">外地住宿</span><span class="down">-¥'+lodging+'</span></div>':"")
     +'<div class="forecast">🔮 <b>明日风向</b><br>'+phaseForecast(S.day+1)+'</div>';
+  dimPast();
   anchorNext=true; anchorEl=null;
   pushBlock(card);
   save();
-  showChoices([{label:"🌅 进入下一天",primary:true,fn:()=>startDay()}]);
+  showChoices([{label:"🌅 进入下一天",primary:true,silent:true,fn:()=>startDay()}],null,"📋 今日结算");
 }
 function checkHardEndings(){
   if(S.risk>=100){ending("be_jail");return true;}
