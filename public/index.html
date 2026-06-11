@@ -293,7 +293,7 @@ function newState(idolName,groupName,alias){
     idol:{name:idolName, group:groupName, role:pick(ROLES), persona:persona.n, personaDesc:persona.desc,
           secret:pick(SECRETS).id, cluesFound:0},
     alias, inventory:[], invSeq:1,
-    gear:0, dryDays:0, itemsToday:0, todayPenalty:false, luckyDay:0, gpsUntil:0,
+    gear:0, dryDays:0, itemsToday:0, todayPenalty:false, luckyDay:0, gpsUntil:0, intelSurgeUntil:0,
     carpoolDay:0, commission:null, groupSpecials:[], extraSigning:false,
     sched:[], away:false, awayCity:"", awayShotToday:false, concertPlanned:false, momCalls:0,
     snap:{money:6000,risk:0,shots:0},
@@ -782,6 +782,103 @@ const MORNING_EVENTS=[
       }},
     ]);
   }},
+  // ---- 反窥专用小马甲 ----
+  {w:2,cond:()=>S.day>=7&&(S.fame>=20||S.risk>=35)&&!S.flags.fwDone,run(){
+    S.flags.fwDone=true;
+    pushNarr('📵 圈子炸了——公司一夜之间开了个新官方号：「<b>反窥专用小马甲</b>」。<br>专发私生的高清照片，<span class="warn">不打码</span>，配时间地点：「6月3日 14:22 酒店西侧消防通道」「6月5日 09:10 机场T2值机岛」……<br>你一条条往下翻，手越来越凉——<span class="em">第七条视频里，有一个抱着相机快步走开的背影。那件外套你有一件一模一样的。</span>');
+    showChoices([
+      {label:"全套换装备换风格（-¥900）",sub:"风险-12 · 旧的外套、包、帽子全扔",disabled:S.money<900,fn(){
+        addMoney(-900);addRisk(-12);
+        pushNarr('你把那件外套塞进了小区的旧衣回收箱，连同帽子和双肩包。<br>新行头是完全不同的风格。镜子里的人陌生得让你安心。');
+        morningBrief();
+      }},
+      {label:"应该不是我，赌一把",sub:"风险+6 · 那个背影也可能是别人",fn(){
+        addRisk(6);
+        pushNarr('你放大看了十遍，越看越像，又越看越不像。<br>最后你关掉手机：圈里同款外套多了去了。<span class="hint">但今天出门前，你还是把帽檐压得格外低。</span>');
+        morningBrief();
+      }},
+    ]);
+  }},
+  // ---- 考场蹲守 ----
+  {w:2,cond:()=>S.day>=6&&!S.flags.examDone&&!S.away,run(){
+    S.flags.examDone=true;
+    pushNarr('📝 今天他有<b>文化课结业考试</b>——养成系的命，舞台和课本都得扛。<br>考点昨晚就被人挂到了群里。一早，考场外已经聚了几十个举手机的，和陪考家长挤在一起，警戒线都快撑不住了。');
+    showChoices([
+      {label:"去考场外蹲（花掉一整天）",sub:"沉沦+8 · 风险+10 · 这图稀有，但场面可能上新闻",fn(){
+        addChenlun(8);addRisk(10);
+        gainItem(3,"考场外速写","出考场时被吓了一跳的他，低头快走");
+        if(chance(0.35)){
+          addRisk(12);
+          pushNarr('交卷铃响，他在工作人员包围中出来，被几十台手机怼脸——<span class="warn">现场一度失控，有家长报了警。</span><br>当晚 #私生围堵考场# 上了热搜，新闻视频里你的伞角入了镜。<br><span class="hint">评论区一万条骂声。你一条条看完了。</span>');
+        }else{
+          pushNarr('他出来得很快，低着头，被半个公司的工作人员围着塞进车里。<br>你拍到了。但取景器里他被吓到的表情，让这张图拿在手里有点烫。');
+        }
+        pushSys("这一天就这么过去了");
+        endDay(true);
+      }},
+      {label:"不去。让他好好考个试吧",sub:"沉沦-6 · 风险-2",fn(){
+        addChenlun(-6);addRisk(-2);
+        pushNarr('你想起自己高考那天，妈妈在考场外站了一上午。<br>「考试这种事，谁都不该被打扰。」你难得地把今天还给了自己。');
+        morningBrief();
+      }},
+    ]);
+  }},
+  // ---- 行程黑产被严打 ----
+  {w:2,cond:()=>S.day>=10&&!S.flags.busted,run(){
+    S.flags.busted=true;
+    S.intelSurgeUntil=S.day+2;
+    for(const it of S.intel){if(!it.bought&&it.cost){it.cost=Math.round(it.cost*1.5/10)*10;it.src="（严打期渠道紧张 ¥"+it.cost+"，准度高）";}}
+    pushNarr('⚖️ 早间新闻推送：<b>某航司外包客服被判刑</b>——她用纸笔偷抄系统里的艺人航班和身份证号带出来卖，50 块一条，下游加价到上千，一年赚了两万多。<br>圈内瞬间风声鹤唳：几个老牌行程贩子连夜清空了主页。<br><span class="warn">未来三天，收费线报全面涨价 50%。</span><br><span class="hint">群里有人说「卖行程的判了，买行程的呢？」——没人接话。</span>');
+    morningBrief();
+  }},
+  // ---- 地勤晒护照 ----
+  {w:1,cond:()=>S.day>=5&&!S.flags.gsDone,run(){
+    S.flags.gsDone=true;
+    addRisk(-2);
+    pushNarr('🛂 今早的大瓜：有个机场地勤把<b>他的护照和机票</b>拍照发到了社交平台，配文「今天碰到'+esc(S.idol.name)+'，可惜同事都不认识」。<br>两小时后航司发声明：核实属实，已处分。<br><span class="hint">群里都在骂地勤，你却想起自己硬盘里那几张行程截图——上游塌一个，全链条都得抖三抖。</span>');
+    pushSys("行业风声收紧，你今天格外低调（风险 -2）");
+    morningBrief();
+  }},
+  // ---- 安保摔相机 ----
+  {w:2,cond:()=>S.stats.shots>=5,run(){
+    pushNarr('📷 今早开机，取景器一片花屏——<span class="warn">昨晚被安保推搡驱赶的时候，相机磕在了护栏上。</span>当时只顾着跑，现在心疼得直抽抽。');
+    showChoices([
+      {label:"送修换件（-¥800）",sub:"吃饭的家伙不能将就",disabled:S.money<800,fn(){addMoney(-800);pushSys("维修小哥：「你这相机比你过得糙多了」");morningBrief();}},
+      {label:"花屏就花屏，凭手感拍",sub:"今天出图质量会受影响",fn(){S.todayPenalty=true;pushSys("你决定今天当一回盲拍大师");morningBrief();}},
+    ]);
+  }},
+  // ---- 手机碎屏 ----
+  {w:2,cond:()=>S.day>=4,run(){
+    pushNarr('📱 早高峰的地铁把你挤成了相片，手机脱手飞出去——捡回来时，<span class="warn">屏幕裂成了蜘蛛网。</span>线报、群消息、导航，全指着它。');
+    showChoices([
+      {label:"地铁口快修换屏（-¥500）",sub:"信息就是生命线",disabled:S.money<500,fn(){addMoney(-500);pushSys("二十分钟换好，贴膜小哥多送了张钢化膜");morningBrief();}},
+      {label:"裂着用，省下这笔钱",sub:"今天看图修图全靠猜 · 出图质量受影响",fn(){S.todayPenalty=true;pushSys("你眯着眼在裂缝里辨认群消息");morningBrief();}},
+    ]);
+  }},
+  // ---- 淋雨发烧 ----
+  {w:1,cond:()=>S.day>=3,run(){
+    pushNarr('🤒 昨晚的雨淋透了。早上起来嗓子像吞了砂纸，一量体温：<span class="warn">38.2°</span>。');
+    showChoices([
+      {label:"去诊所输液（-¥300）",sub:"身体是蹲点的本钱",disabled:S.money<300,fn(){addMoney(-300);pushSys("输完液你活了过来，医生说「少熬夜」，你说好");morningBrief();}},
+      {label:"吃两片布洛芬硬扛",sub:"体力-25 · 行程不等人",fn(){addEnergy(-25);addChenlun(2);pushSys("你晃晃悠悠出了门，世界有点旋转");morningBrief();}},
+    ]);
+  }},
+  // ---- 硬盘故障 ----
+  {w:1,cond:()=>S.inventory.length>=3,run(){
+    pushNarr('💾 灾难。存素材的移动硬盘今早插上去<span class="warn">咔哒咔哒响，读不出来了</span>——你的库存全在里面。');
+    showChoices([
+      {label:"送数据恢复（-¥800）",sub:"库存全保",disabled:S.money<800,fn(){addMoney(-800);pushSys("数据全部恢复。工程师：「下次备份，姐」");morningBrief();}},
+      {label:"反复插拔赌一把",sub:"50% 没事 · 50% 丢失库存里最值钱的一份素材",fn(){
+        if(chance(0.5)){pushSys("第七次插拔之后，它咳嗽着活了过来。你出了一身冷汗");}
+        else{
+          const best=[...S.inventory].sort((a,b)=>b.lv-a.lv)[0];
+          if(best){S.inventory=S.inventory.filter(x=>x.id!==best.id);pushNarr('<span class="warn">「'+esc(best.name)+'」所在的分区彻底坏了。</span>你盯着报错弹窗坐了十分钟。<span class="hint">这行最贵的学费叫「没备份」。</span>');}
+          else pushSys("硬盘救回来了");
+        }
+        morningBrief();
+      }},
+    ]);
+  }},
   {w:1,cond:()=>!S.away,run(){
     pushNarr('💌 高中室友的婚礼请帖到了，就在今天。「你一定要来呀，好几年没见了。」');
     showChoices([
@@ -847,6 +944,10 @@ function genIntel(){
     else if(p.idx===p.len-1)mk("airport","arr","他今天从"+p.city+"回来，落地时间已流出",false,0.9);
   }else if(p.phase==="concert"){
     S.intel.push({type:"concert",sub:"",title:"今晚 19:30 演唱会，场馆外下午就会开始堵人",src:"（官宣行程，绝对真实）",cost:0,bought:true,real:true,used:false});
+  }
+  // 行程黑产被严打期间：收费线报涨价 50%
+  if(S.intelSurgeUntil&&S.day<=S.intelSurgeUntil){
+    for(const it of S.intel){if(!it.bought&&it.cost){it.cost=Math.round(it.cost*1.5/10)*10;it.src="（严打期渠道紧张 ¥"+it.cost+"，准度高）";}}
   }
   // GPS 定位器：期间所有情报为真且免费
   if(S.gpsUntil&&S.day<=S.gpsUntil){
@@ -997,6 +1098,15 @@ function insertBeat(){
     ()=>{pushNarr('<span class="hint">一只三花猫不知道从哪儿钻出来，蹭了蹭你的三脚架，又蹭了蹭你的裤腿。等待的烦躁忽然就消了一半。</span>');addChenlun(-1);},
     ()=>{pushNarr('<span class="hint">旁边的代拍大姐接了个电话，扩音漏出来一句「明天的相亲你到底去不去！」。她面无表情挂断，继续盯着出口。你俩谁也没看谁。</span>');},
     ()=>{pushNarr('<span class="hint">「请问……你是『'+esc(S.alias)+'』吗？我存过好多你的图！」一个小站姐激动地凑过来。你签下了人生第一个「站姐签名」，荒诞又有点爽。</span>');addFame(2);addRisk(1);},
+    ()=>{
+      if(S.money>=150){addMoney(-150);pushNarr('<span class="hint">收工已是凌晨两点，末班车没了。黑车师傅摇下车窗看了眼你的设备包：「150，不讲价。蹲明星的吧？你们这种我拉多了。」（-¥150）</span>');}
+      else{pushNarr('<span class="hint">收工已是凌晨两点，末班车没了，兜里也打不起黑车。你背着设备走了四十分钟，路灯把影子拉得很长。</span>');addEnergy(-8);}
+    },
+    ()=>{
+      if(chance(0.5)&&S.money>=400){addMoney(-400);pushNarr('<span class="warn">你蹲累了眯了五分钟——睁眼，三脚架没了。</span><span class="hint">连个监控死角都挑得这么专业，偷你的人八成也是同行。回家路上你又下单了一支（-¥400）。</span>');}
+      else if(S.money>=150){addMoney(-150);pushNarr('<span class="hint">挤位置的时候，你的 UV 镜磕在栏杆上碎了。还好只是保护镜——这行干久了，碎的东西见多了。（-¥150）</span>');}
+      else pushNarr('<span class="hint">挤位置的时候，你的 UV 镜磕碎了。买不起新的，裸奔吧——反正这行干久了，碎的东西见多了。</span>');
+    },
   ];
   pick(beats)();
 }
@@ -1053,6 +1163,16 @@ function actFlight(intel){
   ],{seconds:5,timeoutIndex:2});
 }
 function flightCabin(extraRisk){
+  // 恶意值机的「邻座」剧情
+  if(S.flags.seatHack){
+    S.flags.seatHack=false;
+    addChenlun(10);addRisk(12);
+    const lvUp=addImp(3);
+    pushNarr('<span class="warn">你用那串身份证号选的座位生效了——他就在你旁边。</span><br>落座时他礼貌地朝你点了点头，然后戴上耳机闭眼。三个小时里，你们的手肘隔着扶手不到十厘米。<br>你能听见他耳机里漏出来的伴奏，能看见他睫毛上的疲惫。<span class="em">你拥有了全圈最近的距离。</span><br>降落前他睁开眼，目光在你脸上停了一秒——<span class="warn">「我们……是不是见过？」</span><br>你慌乱地摇头。他没再说话，但下飞机时，他跟助理低声说了句什么，助理回头看了你一眼。');
+    gainItem(5,"邻座视角","耳机线、睫毛、椅背上交叠的光——全圈没有第二个人有这个角度");
+    if(lvUp)impCrossNarr(lvUp);
+    return flightLand();
+  }
   pushNarr('机舱里很安静。他坐在你斜前方三排，戴着耳机看窗外。云层在他侧脸上投下一片缓慢移动的光。<br><span class="hint">三个小时的航程，就你们俩——和一整架飞机不知情的乘客。</span>');
   showChoices([
     {label:"用长焦远远拍几张，落地就撤",sub:"标准操作",fn(){
@@ -1079,6 +1199,28 @@ function flightCabin(extraRisk){
   ]);
 }
 function flightLand(){
+  // 机舱失控：落地瞬间同舱私生集体扑过去
+  if(chance(0.35)){
+    pushNarr('<span class="warn">安全带指示灯刚灭，机舱炸了。</span><br>前后舱七八个同行——你居然没认出来这么多——<span class="em">集体涌向他的座位</span>。镜头怼脸、手机开闪光，有人挤翻了过道乘客的水杯，一支大炮镜头从他头顶十公分的地方抡了过去。<br>空乘的呵斥被尖叫盖过去了。差点踩踏。');
+    return showChoices([
+      {label:"跟着冲上去，这角度千载难逢",sub:"沉沦+8 · 风险+12 · 你也成了新闻里的「他们」",fn(){
+        addChenlun(8);addRisk(12);
+        const lvUp=addImp(1);
+        gainItem(3,"机舱混乱直拍","他抱着头被空乘护住，眼神疲惫又警惕");
+        pushNarr('你挤进人堆按了十几张。他被空乘和助理护着，半个身子缩在舷窗边。<br>同班机一个女明星看不下去发了微博：「两小时航程变成围猎，差点出踩踏事故，相机几乎砸到头。」<br><span class="hint">热搜上挂了一晚上。你在新闻视频的人堆里，找到了自己的胳膊。</span>');
+        if(lvUp)impCrossNarr(lvUp);
+        flightLandFin();
+      }},
+      {label:"坐着不动，等人散完",sub:"沉沦-4 · 全机舱只有你和空乘没动",fn(){
+        addChenlun(-4);
+        pushNarr('你把相机压在腿上，看着那团人潮把他吞进去又吐出来。<br>下机时他经过你的座位，目光扫过你和你膝盖上倒扣的相机——<span class="em">停了半秒。</span><br><span class="hint">那眼神不是警惕。更像是……困惑：原来还有不扑上来的。</span>');
+        flightLandFin();
+      }},
+    ]);
+  }
+  flightLandFin();
+}
+function flightLandFin(){
   const city=phaseOf(S.day).city||"外地";
   if(chance(0.5)){
     pushNarr('落地'+esc(city)+'。出口已经有本地粉丝在等，但比起本市的修罗场，这里简直温和。你轻松卡到好位，又补了几张出口图。');
@@ -1353,6 +1495,22 @@ function actStudio(intel){
       if(lvUp)impCrossNarr(lvUp);
       finStudio();
     }},
+    ...(isPractice?[{label:"跟着外卖小哥混进货梯上楼",sub:"重度越界 · 练习室就在 11 楼 · 公司监控不是摆设",fn(){
+      addChenlun(14);
+      if(chance(0.45)){
+        addRisk(15);
+        gainItem(5,"练习室窗缝实拍","凌晨一点，他对着整面镜子一遍遍重来同一个动作");
+        const c=gainClue();
+        pushNarr('货梯在 11 楼停下。消防通道的门没锁。<br>你贴着墙根挪到练习室侧窗——<span class="em">凌晨一点，整层楼只有这一间亮着。</span>他一个人对着镜子，同一个八拍，跳了一遍，又一遍，又一遍。<br>第七遍的时候他忽然蹲下去，把脸埋进了手肘里。<br><span class="hint">你按了快门。但这张图你大概永远不会卖——它太像偷来的日记了。</span>');
+        if(c)pushNarr('<span class="hint">你还注意到一件事：'+esc(c)+'</span>');
+      }else{
+        addRisk(22);
+        const lvUp=addImp(2);
+        pushNarr('<span class="warn">货梯门一开，对面站着保安。</span><br>「又来一个。」他面无表情地把你「请」进了一楼监控室——墙上的屏幕里，是消防楼梯每一层的画面。「上礼拜抓了仨。你们是商量好的？」<br>登记证件、拍照存档、拉黑名单，一气呵成。<br><span class="hint">出门时你听见对讲机里说：「11 楼那位问是不是又有人上来……跟他说处理好了。」</span>');
+        if(lvUp)impCrossNarr(lvUp);
+      }
+      finStudio();
+    }}]:[]),
     {label:isPractice?"绕到地库入口蹲保姆车":"绕到后门，跟着设备车混进缓冲区",sub:"越界·可能看到不该看的",fn(){
       addChenlun(10);
       if(chance(0.5)){
@@ -1620,6 +1778,149 @@ function afterFace(){
 //              晚间突发事件（大瓜 / 离奇）
 // ===================================================
 const EVE_EVENTS=[
+  // ---- 酒店退房打卡 ----
+  {id:"hotelroom",w:2,minDay:8,once:true,run(){
+    pushNarr('🌙 收工路上，小群里炸出一条消息：<br>「他们今天退房了，<b>1208</b>，保洁还没上去，门禁有个漏洞……」<br>配图是酒店走廊。已经有两个 ID 回了「在路上」。<br><span class="warn">圈里管这个叫「打卡」——进他刚住过的房间。</span>');
+    showChoices([
+      {label:"去。这是离他最近的机会",sub:"沉沦+18 · 这一步迈出去就回不来了",fn(){
+        addChenlun(18);addRisk(10);
+        gainItem(5,"1208 房间实拍","没叠的被子、喝了一半的水、窗台上的喉糖");
+        pushNarr('房间还留着没散的须后水味道。先到的两个女生一个在闻浴袍，一个坐在床沿自拍，嘴里念叨「果然是大床房」。<br>你举起相机的手停了一下——<span class="em">你在干什么？</span>这个念头只闪了一秒，快门还是响了。<br>临走时有人把他咬过一口的软糖分着吃了：「吃了，你们随意。」<br><span class="hint">你没吃。但你拿走了窗台上那张揉皱的便签，上面是半句没写完的歌词。</span>');
+        S.flags.keepsakes.push("揉皱的歌词便签");
+        if(chance(0.4)){
+          addRisk(15);addImp(1);
+          pushNarr('<span class="warn">第二天中午，公司官方号放出了走廊监控截图。</span>三个人，无码。你的脸在最右边，半张。<br>评论区已经有人开始扒你的代号。');
+        }
+        nightOffer();
+      }},
+      {label:"到门口，拍了张房号牌就走",sub:"沉沦+6 · 风险+4 · 你管这叫底线",fn(){
+        addChenlun(6);addRisk(4);
+        gainItem(3,"1208 门牌打卡","你和那扇门之间隔着一整个理智");
+        pushNarr('电梯到 12 楼，你听见房间里已经有笑声了。<br>你站在门口拍了张门牌，转身按了下行键。<br><span class="hint">回去的路上你一直在想：你比她们好在哪？大概只好那么一点点。可你居然为这一点点感到骄傲。</span>');
+        nightOffer();
+      }},
+      {label:"把消息截图发给酒店前台",sub:"沉沦-8 · 风险-4 · 群里要是知道了，你就完了",fn(){
+        addChenlun(-8);addRisk(-4);
+        pushNarr('你匿名打了酒店前台电话。十分钟后群里哀嚎一片：「保安上来了！」「谁报的信？！」<br>你跟着发了个问号，手心全是汗。<br><span class="hint">那晚你睡得意外地好。</span>');
+        nightOffer();
+      }},
+    ]);
+  }},
+  // ---- 恶意值机 ----
+  {id:"checkin",w:1,minDay:12,once:true,cond:()=>S.chenlun>=30,run(){
+    pushNarr('🌙 一个做「数据」生意的号私聊你，发来一张打码截图：<br>「他的<b>身份证号</b>，¥800。自己懂怎么用吧？值机选座、查行程，都行。」<br><span class="warn">圈里早有人这么干：有人替偶像值机选自己邻座，有人恶意把人家行程反复取消。</span>');
+    showChoices([
+      {label:"买。下次跟机坐他旁边（-¥800）",sub:"沉沦+12 · 风险+8 · 重度越界",disabled:S.money<800,fn(){
+        addMoney(-800);addChenlun(12);addRisk(8);
+        S.flags.seatHack=true;
+        pushNarr('转账之后，一串数字躺在你的收藏夹里。<br>你盯着那串数字看了很久——他的生日、他的籍贯，全在里面。<span class="hint">你拥有了一把不该存在的钥匙。下次跟机，你可以「恰好」坐在他旁边。</span>');
+        nightOffer();
+      }},
+      {label:"买来把他明天的值机取消掉",sub:"沉沦+15 · 风险+12 · 「他冷落营业，给点教训」",disabled:S.money<800,fn(){
+        addMoney(-800);addChenlun(15);addRisk(12);
+        pushNarr('凌晨一点，你在第三方软件上替他取消了值机。<br>第二天群里炸了：他在值机柜台滞留了四十分钟，航司临时给他重新出票，黑眼圈上了热搜。<br>「哪个变态干的？！」群里骂声一片。<span class="warn">你跟着骂了一句，指尖冰凉。</span><br><span class="hint">那一刻你清楚地知道：你不是粉丝了。你是加害者。</span>');
+        nightOffer();
+      }},
+      {label:"举报这个号",sub:"沉沦-5 · 卖身份证号是刑事犯罪",fn(){
+        addChenlun(-5);addRisk(-3);
+        pushNarr('你把聊天记录打包举报了。平台回复「已受理」。<br>号第二天没了。也许换个马甲还会回来，但至少今天，你站在了线的这一边。');
+        nightOffer();
+      }},
+    ]);
+  }},
+  // ---- 深夜骚扰电话 ----
+  {id:"midcall",w:2,minDay:10,once:true,run(){
+    pushNarr('🌙 凌晨，粉群小分队拉你进了一个 6 人语音房。<br>「嘘——」组织者压低声音，「我买到他手机号了。开免提，都别出声。」<br>嘟——嘟——<span class="em">接通了。</span><br>那头安静了两秒，传来一声很轻的、疲惫到沙哑的：「……喂？」');
+    showChoices([
+      {label:"屏住呼吸听下去",sub:"沉沦+10 · 这是你第一次听到他「私下」的声音",fn(){
+        addChenlun(10);
+        pushNarr('没有人说话。那头又「喂」了一声，然后是一声几乎听不见的叹气：<br>「<span class="em">又是你们……求你们了，我明天还有工作。</span>」<br>电话挂断。语音房里有人兴奋地尖叫「他的声音好苏」。<br><span class="hint">你退出了语音房。那声叹气在你耳朵里停了一整夜——你听过他唱歌、听过他营业，但你从没听过他「求人」。</span>');
+        nightOffer();
+      }},
+      {label:"退出语音房，举报卖号的",sub:"沉沦-7 · 半夜的电话是会吓到人的",fn(){
+        addChenlun(-7);addRisk(-2);
+        pushNarr('你直接退了语音房，顺手把组织者的购买记录截图举报了。<br>你想起某次直播里他提过：换了三次手机号，「最怕半夜陌生来电，会想是不是家里出事了」。<br><span class="hint">有些好奇心的代价，是别人的安全感。</span>');
+        nightOffer();
+      }},
+      {label:"默默把号码记下来",sub:"沉沦+12 · 你不打，你只是想「拥有」",fn(){
+        addChenlun(12);
+        pushNarr('你把那串号码存进了备忘录，备注是一个只有你懂的代号。<br>你不会打的——你对自己说。<br><span class="hint">但之后每个深夜，那串数字都躺在那里，像一颗你随时可以按下的按钮。拥有它本身，就已经是一种越界。</span>');
+        nightOffer();
+      }},
+    ]);
+  }},
+  // ---- 跟车追尾目击 ----
+  {id:"rearend",w:2,minDay:9,once:true,run(){
+    pushNarr('🌙 收工开车回家，前面就是他们的保姆车。忽然——<span class="warn">砰！</span><br>一辆私生的白色轿车为了别停保姆车，追尾了！保姆车车尾凹了一大块，私生的车头直接冒烟。<br>你的行车记录仪，<span class="em">拍下了全程。</span>');
+    showChoices([
+      {label:"把记录仪视频卖给营销号",sub:"+¥800 · 风险+6 · 沉沦+6",fn(){
+        addMoney(800);addRisk(6);addChenlun(6);
+        S.feedPosts.unshift({gua:true,name:"圈内一手菌",time:"刚刚",body:"💥 "+esc(S.idol.group)+"保姆车遭私生追尾！行车记录仪视频流出，所幸艺人无碍。这都要出人命了，还不管管？",meta:["转发 4.2万","评论 1.8万","赞 11万"]});
+        pushNarr('视频当晚全网疯传，#私生追尾保姆车# 挂上热搜。公司报警声明发得飞快。<br><span class="hint">钱到账了。只是评论区一万条「私生去死」，每一条你都觉得在说自己——你当时的车距，也没比那辆白车远多少。</span>');
+        nightOffer();
+      }},
+      {label:"停车，把视频交给他们的工作人员",sub:"风险-8 · 你第一次站到了「另一边」",fn(){
+        addRisk(-8);addChenlun(-6);
+        pushNarr('你拷了一份视频递给随车助理当证据。对方愣了一下，说了声谢谢，多看了你两眼——<span class="hint">那眼神好像在说：你看着眼熟。</span><br>回家的路上你开得很慢很慢。今晚你帮的是他，也说不清是不是在赎什么。');
+        nightOffer();
+      }},
+      {label:"绕开现场，当什么都没看见",sub:"风险-3 · 别蹚浑水",fn(){
+        addRisk(-3);
+        pushNarr('你变道、超车、驶离。后视镜里，私生车主正抱着头蹲在路边。<br><span class="hint">群里很快传开了现场图。你删掉了行车记录仪里的那一段，连同某种说不清的东西一起。</span>');
+        nightOffer();
+      }},
+    ]);
+  }},
+  // ---- 蹲他老家 ----
+  {id:"homecamp",w:1,minDay:15,once:true,cond:()=>S.chenlun>=40,run(){
+    pushNarr('🌙 假期前夜，一个三百人的「冲锋群」里有人甩出一张高德截图：<br>「他回老家过节，<b>小区定位</b>拿到了，X 市 XX 苑。拼车的报名。」<br>下面接龙已经排到了 17。<span class="warn">这是他的家。不是酒店，不是机场——是他爸妈住的地方。</span>');
+    showChoices([
+      {label:"报名拼车去（-¥600）",sub:"沉沦+15 · 风险+10 · 最后一条线也踩过去",disabled:S.money<600,fn(){
+        addMoney(-600);addChenlun(15);addRisk(10);
+        gainItem(4,"老家楼下偶遇","他陪奶奶在菜场挑橘子，弯着腰，笑得和舞台上完全不一样");
+        pushNarr('你蹲在小区菜场对面拍到了他——没有妆，趿着拖鞋，帮奶奶拎着两兜菜。<br>奶奶说了句什么，他笑着把头凑过去听。<span class="em">那是你从没见过的、不属于镜头的笑。</span><br><span class="hint">按下快门的那一刻你忽然鼻酸：你偷走的这张图里，装着的是别人的「家」。而你的家，你多久没回了？</span>');
+        nightOffer();
+      }},
+      {label:"退群。这条线不能踩",sub:"沉沦-12 · 风险-5 · 你居然还有底线，恭喜",fn(){
+        addChenlun(-12);addRisk(-5);
+        pushNarr('你盯着那个接龙看了十分钟，然后退出了群聊。<br>删掉群的那一刻，你给妈妈发了条消息：「过节我回家吃饭。」<br><span class="hint">她秒回了一个笑脸，后面跟着七八个菜名。</span>');
+        nightOffer();
+      }},
+      {label:"匿名把群截图发给公司官方号",sub:"沉沦-8 · 群里要是查出来，你在圈里就混不下去了",fn(){
+        addChenlun(-8);addFame(-3);
+        pushNarr('第二天，公司工作室发了严正声明，那个冲锋群一夜解散。<br>圈子里风声四起：「有内鬼。」几个老熟人开始互相试探排查。<br><span class="hint">你照常潜水、照常吃瓜，只有你自己知道——那条最疯的线，是你掐断的。</span>');
+        nightOffer();
+      }},
+    ]);
+  }},
+  // ---- 收买保洁 ----
+  {id:"maid",w:1,minDay:12,once:true,cond:()=>S.money>=1000,run(){
+    pushNarr('🌙 代拍群里有人发起「众筹」：<br>「他们这周住 XX 酒店，我搭上了楼层保洁阿姨的线。<b>¥1,000 一个名额</b>，阿姨开工时『顺路』带你进房间转一圈，东西不能拿，随便拍。」<br><span class="warn">已经有两个人转账了。</span>');
+    showChoices([
+      {label:"转账入伙（-¥1,000）",sub:"沉沦+15 · 房间里的东西能出 Lv5 · 也可能被抓现行",disabled:S.money<1000,fn(){
+        addMoney(-1000);addChenlun(15);
+        if(chance(0.6)){
+          addRisk(15);
+          gainItem(5,"房间内部平铺图","行李箱、药盒、翻开扣着的书——他生活的横截面");
+          pushNarr('保洁车挡着监控死角，你们鱼贯而入。十分钟，不开灯，只有快门声。<br>床头放着一板没吃完的褪黑素和半瓶嗓子喷雾。你拍下来的时候，手在抖。<br><span class="hint">出门时阿姨数着钱说「明天他们就退房了，要来趁早」。你忽然很想吐。</span>');
+        }else{
+          addRisk(25);addImp(1);
+          pushNarr('<span class="warn">房门刷开的瞬间，里面坐着两个酒店保安。</span><br>「等你们半天了。」阿姨上周就被监控盯上了，今天是钓鱼。登记证件、酒店拉黑、警告记录在案——一千块连个响都没听见。<br><span class="hint">保安里有一个一直盯着你看：「你脸熟。」</span>');
+        }
+        nightOffer();
+      }},
+      {label:"不参与",sub:"这钱烫手",fn(){
+        addChenlun(-2);
+        pushNarr('你划走了那条消息。半小时后群里发来房间内景的「成果预览」，你看了一眼就关掉了。<br><span class="hint">有些门，看一眼都觉得脏。</span>');
+        nightOffer();
+      }},
+      {label:"提醒酒店换保洁排班",sub:"沉沦-5 · 风险-5 · 断人财路的事你干了",fn(){
+        addChenlun(-5);addRisk(-5);
+        pushNarr('你用小号给酒店打了个电话。当晚「众筹」组织者在群里破口大骂：「阿姨被调岗了！哪个杀千刀的？！」<br><span class="hint">你回了个「太惨了」，然后把这个群也退了。</span>');
+        nightOffer();
+      }},
+    ]);
+  }},
   {id:"saozi",w:2,minDay:12,run(){
     pushNarr('🌙 深夜回家的出租车在老城区等红灯。你无意中瞥向窗外——<br><br><span class="em">那辆熟悉的保姆车，停在巷子口。</span><br><br>一个戴鸭舌帽的长发女生快步小跑过去，车门从里面推开。借着路灯，你清清楚楚看见了探身出来接她的人。<br><br>是他。没有助理，没有经纪人，他亲自坐在后排等一个女生。<br><br><span class="warn">这是能把超话炸成废墟的瓜。</span>你的手已经摸到了相机。');
     showChoices([
