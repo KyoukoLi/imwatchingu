@@ -136,6 +136,8 @@ body{font-family:-apple-system,"PingFang SC","HarmonyOS Sans SC","Microsoft YaHe
 .statrow:last-child{border:none}
 .statrow .k{color:var(--txt2)}
 .mystery{color:var(--txt3);letter-spacing:2px}
+.statnote{font-size:11.5px;color:var(--txt3);padding:0 0 8px;margin-top:-5px;border-bottom:1px solid var(--line);line-height:1.5}
+.statnote:last-child{border:none}
 
 /* ---------- summary ---------- */
 .sumcard{background:var(--card);border:1px solid var(--violet);border-radius:14px;padding:16px;margin-bottom:12px}
@@ -1117,6 +1119,7 @@ function maybeFaceEvent(){
 }
 function impCrossNarr(lv){
   if(lv>0&&IMP_HINTS[lv])pushNarr('<span class="hint">'+IMP_HINTS[lv]+'</span>');
+  if(lv===1)pushSys("「我的」页解锁了新的一栏：他对你的印象");
 }
 function postFaceEscalate(){
   if(S.flags.faceEvent){
@@ -2550,15 +2553,35 @@ function sellItem(id){
   if(checkHardEndings())return;
 }
 
+function impDesc(){
+  if(S.flags.faceEvent)return["💔 他当面求过你了","那天之后，你们之间只剩下安保的距离"];
+  return[
+    null,
+    ["😶 有点眼熟","收工时他的视线在你脸上停过半秒。大概是错觉吧"],
+    ["😨 记住了你的脸","看到你时，他会下意识把帽檐压得更低"],
+    ["🥶 警惕与厌恶","他看你的眼神没有温度。那不是看粉丝的眼神，是看麻烦的眼神"],
+  ][impLevel()];
+}
+function chenDesc(){
+  const c=S.chenlun;
+  if(c>=90)return["🌑 深渊边缘","再往前一步，就再也找不回自己了"];
+  if(c>=70)return["⛈ 病入膏肓","你已经很久没有梦了。世界缩小成了一个人的坐标"];
+  if(c>=40)return["🌧 沦陷","你想不起上次和朋友吃饭是什么时候，但记得他这周每天的行程"];
+  if(c>=15)return["🌤 上头","钱和时间都在悄悄倾斜。你管这叫「热爱」"];
+  return["☀️ 清醒","你还分得清，什么是生活，什么是爱好"];
+}
 function renderMine(sc){
+  const imp=impDesc(), chen=chenDesc();
   let h='<div class="card"><h4>👤 '+esc(S.alias)+(S.away?'（远征中 · '+esc(S.awayCity)+'）':"")+'</h4>'
     +'<div class="statrow"><span class="k">资金</span><span>¥'+fmt(S.money)+'</span></div>'
     +'<div class="statrow"><span class="k">体力</span><span>'+S.energy+' / 100</span></div>'
     +'<div class="statrow"><span class="k">风险值</span><span>'+S.risk+' / 100</span></div>'
     +'<div class="statrow"><span class="k">圈内知名度</span><span>'+fameRank(S.fame)+'</span></div>'
     +'<div class="statrow"><span class="k">装备</span><span>'+(S.gear?"📷 + 大白长焦":"📷 基础相机")+'</span></div>'
-    +'<div class="statrow"><span class="k">他对你的印象</span><span class="mystery">？？？</span></div>'
-    +'<div class="statrow"><span class="k">沉沦度</span><span class="mystery">？？？</span></div>'
+    +(imp
+      ?'<div class="statrow"><span class="k">他对你的印象</span><span>'+imp[0]+'</span></div><div class="statnote">'+imp[1]+'</div>'
+      :'<div class="statrow"><span class="k">他对你的印象</span><span class="mystery">？？？</span></div><div class="statnote">他还不知道你的存在。当他注意到你的那天，这一栏会解锁——但那未必是好事</div>')
+    +'<div class="statrow"><span class="k">沉沦度</span><span>'+chen[0]+'</span></div><div class="statnote">'+chen[1]+'</div>'
     +'</div>';
   h+='<div class="card"><h4>🎤 关于他</h4>'
     +'<div class="statrow"><span class="k">姓名</span><span>'+esc(S.idol.name)+'</span></div>'
