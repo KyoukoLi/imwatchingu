@@ -296,7 +296,7 @@ function newState(idolName,groupName,alias){
           secret:pick(SECRETS).id, cluesFound:0},
     alias, inventory:[], invSeq:1,
     gear:0, dryDays:0, itemsToday:0, todayPenalty:false, luckyDay:0, gpsUntil:0, intelSurgeUntil:0,
-    carpoolDay:0, commission:null, groupSpecials:[], extraSigning:false, daigouDue:0,
+    carpoolDay:0, commission:null, groupSpecials:[], extraSigning:false, daigouDue:0, signCount:0,
     sched:[], away:false, awayCity:"", awayShotToday:false, concertPlanned:false, momCalls:0,
     snap:{money:6000,risk:0,shots:0},
     groupMsgs:[], feedPosts:[], intel:[],
@@ -1868,7 +1868,6 @@ function actConcert(intel){
 function actSigning(){
   S.flags.signingOpen=false; S.extraSigning=false;
   addEnergy(-30); addMoney(-800);
-  const imp=impLevel();
   if(S.flags.watch60||S.flags.black80){
     if(chance(S.flags.black80?0.9:0.5)){
       pushNarr('<span class="warn">检票口，工作人员对着平板看了你两眼，然后把你请到了一边。</span><br>「不好意思，您的购票资格有异常，今天不能入场。」<br>队伍里所有人都在看你。你听见身后有人小声说：「就是她吧，那个被公司挂了的。」');
@@ -1876,39 +1875,51 @@ function actSigning(){
       return afterAction(deltaLine(['<span class="down">-¥800 · 体力 -30</span>','<span class="down">被拒之门外</span>']));
     }
   }
-  if(imp<=1){
-    pushNarr('排到你的时候，他刚喝了口水。<br>你把专辑推过去，他接过，抬头冲你笑：「谢谢你来呀。」<br>笔尖划过封面的沙沙声里，你近距离看着这张脸——原来他睫毛这么长。<br>「要加油哦。」他把专辑递回来，指尖不经意碰到你的。<br><span class="hint">就这十秒钟。你忽然觉得之前蹲过的每一个凌晨都值了——这个念头让你有点害怕。</span>');
+  // 是否已经被偶像本能警惕：只有真正跟踪偷拍过（风险高 / 已被当面认脸）才算。
+  // 单纯买票来签售，是正规行为，不会让他害怕。
+  const wary = S.risk>=45 || impLevel()>=2;
+
+  if(!wary){
+    // —— 普通粉丝：正规、温馨的签售，不会推进「警惕印象」 ——
+    S.signCount=(S.signCount||0)+1;
+    if(S.signCount===1){
+      pushNarr('排到你的时候，他刚喝了口水。<br>你把专辑推过去，他接过，抬头冲你笑：「谢谢你来呀。」<br>笔尖划过封面的沙沙声里，你近距离看着这张脸——原来他睫毛这么长。<br>「要加油哦。」他把专辑递回来，指尖不经意碰到你的。<br><span class="hint">就这十秒钟。你忽然觉得之前等过的每一个日子都值了。</span>');
+    }else{
+      pushNarr('又轮到你。他接过专辑，签到一半忽然抬头：<br>「你是不是上次也来了？」他笑了笑，「谢谢你每次都来呀。」<br><span class="hint">他记住你了——是那种看到常客的、放松的眼神。规规矩矩地喜欢，原来真的能被看见。</span>');
+    }
     addChenlun(5); addFame(5);
-    const lvUp=addImp(2); if(lvUp)impCrossNarr(lvUp);
     S.flags.keepsakes.push("DAY "+S.day+" 签售签名专辑");
     pushSys("获得纪念品：亲签专辑（收藏在「我的」）");
-  }else if(imp===2){
-    pushNarr('排到你。他接过专辑的手停了半拍。<br>「……谢谢支持。」他低头签名，忽然轻声说了一句，轻得只有你们俩能听见：<br><span class="em">「你是不是，经常在机场？」</span><br>你的血一下子凉了半截。');
-    showChoices([
-      {label:"「啊？没有吧，你认错了。」",sub:"装傻到底",fn(){
-        pushNarr('他没再说什么，把专辑递回来，目光在你脸上停了一秒。<br><span class="hint">那一秒里没有怀疑，是确认。</span>');
-        addImp(2); addFame(5);
-        S.flags.keepsakes.push("DAY "+S.day+" 签售签名专辑");
-        afterAction(deltaLine(['<span class="down">-¥800 · 体力 -30</span>','<span class="hint">他记住你了</span>']));
-      }},
-      {label:"「我只是……很喜欢你。」",sub:"说实话",fn(){
-        pushNarr('他签名的笔顿了顿。<br>「喜欢的话，」他把专辑合上递给你，声音很轻，「来这里看我就好。机场太累了，对你、对我都是。」<br>下一位粉丝已经走上来。你攥着专辑离场，眼眶莫名其妙地热。');
-        addChenlun(-8); addImp(1); addFame(5);
-        S.flags.keepsakes.push("DAY "+S.day+" 签售签名专辑（他对你说了一句话）");
-        afterAction(deltaLine(['<span class="down">-¥800 · 体力 -30</span>','<span class="up">心里某处松了一下</span>']));
-      }},
-      {label:"夺过专辑快步离开",sub:"逃",fn(){
-        pushNarr("你几乎是逃出场馆的。手心全是汗，专辑边角被你攥得发皱。");
-        addImp(1);
-        afterAction(deltaLine(['<span class="down">-¥800 · 体力 -30</span>']));
-      }},
-    ]);
-    return;
-  }else{
-    pushNarr('排到你的瞬间，他认出了你。<br>笑容还挂在脸上，但<span class="em">眼神彻底冷了下去</span>。他一言不发地签完名，目光越过你看向下一位，旁边的安保已经朝这边走来。<br>整个过程不超过五秒，比任何呵斥都难受。');
-    addImp(2); addRisk(5);
+    return afterAction(deltaLine(['<span class="down">-¥800 · 体力 -30</span>','<span class="up">他记得你这张常来的脸</span>']));
   }
-  afterAction(deltaLine(['<span class="down">-¥800 · 体力 -30</span>']));
+
+  // —— 已被警惕的私生：他在签售台前认出了那张机场/酒店的脸 ——
+  if(impLevel()>=3){
+    pushNarr('排到你的瞬间，他认出了你。<br>笑容还挂在脸上，但<span class="em">眼神彻底冷了下去</span>。他一言不发地签完名，目光越过你看向下一位，旁边的安保已经朝这边走来。<br>整个过程不超过五秒，比任何呵斥都难受。');
+    addImp(1); addRisk(5);
+    return afterAction(deltaLine(['<span class="down">-¥800 · 体力 -30</span>']));
+  }
+  // 风险已经很高但还没被当面摊牌：他开始把签售的脸和跟拍的脸联系起来
+  pushNarr('排到你。他接过专辑的手停了半拍。<br>「……谢谢支持。」他低头签名，忽然轻声说了一句，轻得只有你们俩能听见：<br><span class="em">「你是不是，经常在机场？」</span><br>你的血一下子凉了半截。');
+  showChoices([
+    {label:"「啊？没有吧，你认错了。」",sub:"装傻到底",fn(){
+      pushNarr('他没再说什么，把专辑递回来，目光在你脸上停了一秒。<br><span class="hint">那一秒里没有怀疑，是确认。</span>');
+      const u=addImp(2); addFame(5); if(u)impCrossNarr(u);
+      S.flags.keepsakes.push("DAY "+S.day+" 签售签名专辑");
+      afterAction(deltaLine(['<span class="down">-¥800 · 体力 -30</span>','<span class="hint">他记住你了</span>']));
+    }},
+    {label:"「我只是……很喜欢你。」",sub:"说实话",fn(){
+      pushNarr('他签名的笔顿了顿。<br>「喜欢的话，」他把专辑合上递给你，声音很轻，「来这里看我就好。机场太累了，对你、对我都是。」<br>下一位粉丝已经走上来。你攥着专辑离场，眼眶莫名其妙地热。');
+      addChenlun(-8); const u=addImp(1); addFame(5); if(u)impCrossNarr(u);
+      S.flags.keepsakes.push("DAY "+S.day+" 签售签名专辑（他对你说了一句话）");
+      afterAction(deltaLine(['<span class="down">-¥800 · 体力 -30</span>','<span class="up">心里某处松了一下</span>']));
+    }},
+    {label:"夺过专辑快步离开",sub:"逃",fn(){
+      pushNarr("你几乎是逃出场馆的。手心全是汗，专辑边角被你攥得发皱。");
+      const u=addImp(1); if(u)impCrossNarr(u);
+      afterAction(deltaLine(['<span class="down">-¥800 · 体力 -30</span>']));
+    }},
+  ]);
 }
 
 // ---- 给妈妈打电话要钱（第三次 = 破产结局） ----
@@ -3254,6 +3265,7 @@ function migrate(s){
   if(s.marketForce===undefined)s.marketForce=null;
   if(s.feedAct===undefined)s.feedAct=null;
   if(s.daigouDue===undefined)s.daigouDue=0;
+  if(s.signCount===undefined)s.signCount=0;
   if(!s.npc)s.npc={oxy:0,cat:0,lost:0,oxyDone:false,lostDone:false};
   if(!s.chain)s.chain={inspect:0,inspectDay:0,cleaned:false,disciple:0,discipleDay:0,discipleGood:false};
   return s;
