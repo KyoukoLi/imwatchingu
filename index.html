@@ -300,6 +300,11 @@ function newState(idolName,groupName,alias){
     sched:[], away:false, awayCity:"", awayShotToday:false, concertPlanned:false, momCalls:0,
     snap:{money:6000,risk:0,shots:0},
     groupMsgs:[], feedPosts:[], intel:[],
+    rep:40, repActed:false, kicked:false,
+    stationFans:rnd(150,400), evidence:0,
+    market:{mult:1,label:"行情平稳",icon:"〰️",desc:"图价正常"}, marketForce:null,
+    npc:{oxy:0,cat:0,lost:0,oxyDone:false,lostDone:false},
+    chain:{inspect:0,inspectDay:0,cleaned:false,disciple:0,discipleDay:0,discipleGood:false},
     flags:{warned30:false,watch60:false,black80:false,debtUsed:false,faceEvent:false,faceDay:0,
            postFaceActs:0, signingDay:7, signingOpen:false, guaActive:false, everLv4:false, soldLv4:0,
            keepsakes:[], secretDone:false},
@@ -374,9 +379,22 @@ function impLevel(){const xp=S.impXP;return xp>=15?3:xp>=9?2:xp>=4?1:0;}
 function freshness(item){return clamp(1-0.15*(S.day-item.day),0.3,1);}
 function itemPrice(item){
   let p=LV_INFO[item.lv].base*(1+S.fame/100)*freshness(item);
-  if(phaseOf(S.day).phase==="comeback")p*=1.3;
+  p*=(S.market&&S.market.mult)||1;
+  if(item.shared)p*=0.4;     // 分享进群的图，全圈都有了
+  if(item.published)p*=0.5;  // 发过超话的图，不再独家
   if(S.flags.black80)p*=0.5;
   return Math.round(p/10)*10;
+}
+function rollMarket(){
+  const ph=phaseOf(S.day).phase;
+  if(S.marketForce){S.market=S.marketForce;S.marketForce=null;return;}
+  const r=Math.random();
+  if(ph==="comeback")S.market={mult:1.3,label:"新歌宣传期",icon:"🔥",desc:"全圈流量高峰，素材溢价 30%"};
+  else if(ph==="concert")S.market={mult:1.4,label:"演唱会日",icon:"🎤",desc:"现场图供不应求，溢价 40%"};
+  else if(r<0.10)S.market={mult:1.5,label:"全网吃瓜日",icon:"🍉",desc:"隔壁家塌了，全圈流量暴涨，素材溢价 50%"};
+  else if(r<0.20)S.market={mult:0.7,label:"平台严打",icon:"🧊",desc:"清查买卖生图，收图的全缩了，图价 -30%"};
+  else if(r<0.28)S.market={mult:1.2,label:"物料荒",icon:"📭",desc:"他好几天没露面，群友嗷嗷待哺，图价 +20%"};
+  else S.market={mult:1,label:"行情平稳",icon:"〰️",desc:"图价正常"};
 }
 
 // ---------------- stat changes ----------------
@@ -615,10 +633,18 @@ $("#screen").addEventListener("scroll",()=>requestAnimationFrame(updateMoreHint)
 // ===================================================
 function startDay(){
   S.day++; S.stats.days=S.day;
-  S.itemsToday=0; S.todayPenalty=false; S.commission=null; S.awayShotToday=false;
+  S.itemsToday=0; S.todayPenalty=false; S.commission=null; S.awayShotToday=false; S.feedAct=null;
   addEnergy(60);
   ensureSchedule(S.day+3);
   S.snap={money:S.money,risk:S.risk,shots:S.stats.shots};
+  // 群地位：昨天没冒泡就掉，掉到 0 被踢
+  let justKicked=false;
+  if(S.day>1&&!S.kicked){
+    if(!S.repActed)S.rep=Math.max(0,S.rep-4);
+    if(S.rep<=0){S.kicked=true;justKicked=true;}
+  }
+  S.repActed=false;
+  rollMarket();
   genIntel(); genGroupMsgs(); genFeed();
   markDot("group"); markDot("feed");
   refreshBar(); save();
@@ -626,6 +652,7 @@ function startDay(){
   todayEl.innerHTML="";
   anchorNext=true; anchorEl=null; // 新一天：锚定到第一条内容，从头读起
   pushSys("DAY "+S.day+" · "+["晴","多云","小雨","阴","降温","闷热"][rnd(0,5)]);
+  if(justKicked)pushNarr('<span class="warn">📵 你被移出了「'+esc(S.idol.name)+'唯爱小分队」。</span><br>没有任何预告，群聊界面变成了灰色的「你已不在该群中」。潜水太久的人，第一批被清理。<br><span class="hint">免费线报渠道断了。去粉群页想办法回去吧。</span>');
 
   // 远征归来
   if(S.away&&phaseOf(S.day).phase!=="trip"){
@@ -783,6 +810,137 @@ const MORNING_EVENTS=[
         morningBrief();
       }},
     ]);
+  }},
+  // ==== 连锁链：公司内部排查（三段式）====
+  {w:3,cond:()=>S.chain.inspect===0&&S.day>=13&&(S.fame>=35||S.flags.soldLv4>=1),run(){
+    S.chain.inspect=1;S.chain.inspectDay=S.day;
+    pushNarr('🕵️ 群里气氛不对。有人转出一张内部截图：<br>「公司这次动真格了，<b>专项排查行程泄露和私下卖图</b>，列了一份重点名单，听说连买家都要倒查。」<br><span class="warn">你最近出过的那些图，在脑子里一张张翻过。</span>');
+    showChoices([
+      {label:"连夜清理痕迹（-¥500）",sub:"删帖、换号、转移硬盘 · 风险-5",disabled:S.money<500,fn(){
+        addMoney(-500);addRisk(-5);S.chain.cleaned=true;
+        pushNarr('你花了一整晚：旧帖删干净、小号注销、交易记录全转到新设备。<br><span class="hint">做完这一切，窗外天都亮了。你像个真正的「从业者」一样专业——这个念头让你睡不着。</span>');
+        morningBrief();
+      }},
+      {label:"没事，查不到我头上",sub:"赌一把",fn(){
+        pushNarr('你翻了翻自己的主页，安慰自己：「我又不是最过分的。」<br><span class="hint">每个上名单的人，之前都是这么想的。</span>');
+        morningBrief();
+      }},
+    ]);
+  }},
+  {w:9,cond:()=>S.chain.inspect===1&&S.day>=S.chain.inspectDay+2,run(){
+    S.chain.inspect=2;
+    pushNarr('🕵️ 排查进入第二阶段——<span class="warn">群里开始互咬了。</span><br>「我就说怎么每次行程都漏，原来群里有人卖！」「查 IP！」「@所有人 自证！」<br>三百人的群一夜退了四十个。有人开始点名，下一个就轮到你。');
+    showChoices([
+      {label:"先发制人，指认别家大站",sub:"风险-12 · 沉沦+10 · 你把火引向了别人",fn(){
+        addRisk(-12);addChenlun(10);S.rep=Math.max(0,S.rep-8);
+        pushNarr('你甩出半真半假的「证据」，把矛头指向了隔壁站子。群里的怒火立刻转向。<br>那个站姐当晚被挂，连夜注销了账号。<br><span class="hint">她到底卖没卖过图，你其实不知道。你只知道——不是你就行。</span>');
+        morningBrief();
+      }},
+      {label:"晒记录自证清白（-¥800）",sub:"找人做「干净」的流水 · 风险-5",disabled:S.money<800,fn(){
+        addMoney(-800);addRisk(-5);S.rep=Math.min(100,S.rep+3);
+        pushNarr('你晒出了一份处理过的记录，配文「身正不怕影子斜」。几个老姐妹出来替你说话，风向稳住了。<br><span class="hint">「干净」是可以买的。这个圈子你越来越懂了。</span>');
+        morningBrief();
+      }},
+      {label:"沉默潜水，等风头过去",sub:"风险+6 · 沉默在审判里就是可疑",fn(){
+        addRisk(6);S.rep=Math.max(0,S.rep-4);
+        pushNarr('你一言不发。但你的沉默被人截了图：「这位平时挺活跃啊，怎么这会儿不说话了？」<br>你盯着那条消息看了很久，最终还是没回。');
+        morningBrief();
+      }},
+    ]);
+  }},
+  {w:9,cond:()=>S.chain.inspect===2&&S.day>=S.chain.inspectDay+4,run(){
+    S.chain.inspect=3;
+    const score=S.evidence+(S.chain.cleaned?-2:0)+(S.risk>=60?2:0);
+    if(score>=4){
+      addRisk(18);
+      pushNarr('🕵️ 排查结果出来了——<span class="warn">你在名单上。</span><br>公司法务的官方账号发了一则声明，点了七个代号，第三个就是「'+esc(S.alias)+'」。<br>「以上人员涉嫌侵犯艺人隐私，相关证据已做公证，将依法处理。」<br><span class="hint">你在群里留下的每一段语音、每一张图，都成了公证处文件袋里的一页。</span>');
+      pushSys("风险 +18 · 你上了公司的公证名单");
+    }else{
+      addRisk(-5);
+      pushNarr('🕵️ 折腾了一周的排查雷声大雨点小——公司点了几个早就臭名昭著的代号，<span class="em">没有你。</span><br>群里劫后余生般地热闹起来。你长出一口气'+(S.chain.cleaned?'：那晚连夜清理的 ¥500，花得太值了。':'，但后背的冷汗提醒你：这次只是运气。'));
+      pushSys("排查结束 · 你逃过一劫（风险 -5）");
+    }
+    morningBrief();
+  }},
+  // ==== 偶像侧：他病了 ====
+  {w:2,cond:()=>S.day>=5&&!S.flags.sickDone,run(){
+    S.flags.sickDone=true;
+    S.intel=S.intel.filter(it=>it.type==="concert");
+    S.marketForce={mult:1.2,label:"物料荒",icon:"📭",desc:"他病休中，存图行情看涨"};
+    pushNarr('💉 一早超话就炸了：<b>他病了。</b>官方通报「急性肠胃炎，今日行程全部取消」。<br>配图是凌晨医院走廊的模糊路透——已经有私生比救护车先到了。<br><span class="hint">今天的线报全部作废。</span>');
+    showChoices([
+      {label:"赶去医院蹲住院部",sub:"沉沦+10 · 风险+8 · 连这种时候都不放过",fn(){
+        addChenlun(10);addRisk(8);addEnergy(-30);
+        gainItem(4,"住院部走廊抓拍","病号服、吊瓶架、被助理扶着的背影");
+        pushNarr('住院部楼下已经聚了七八个同行。你跟着「踩点攻略」上到他那层，在消防通道拍到了他输液回病房的背影。<br><span class="hint">他瘦得厉害。你按快门的手顿了一下——但还是按了。</span>');
+        morningBrief();
+      }},
+      {label:"在超话发祝福，安心等他回来",sub:"知名度+2 · 像个正常粉丝那样",fn(){
+        addFame(2);addChenlun(-3);
+        pushNarr('你发了条「好好休息，我们等你」，配了一张你拍过最好看的舞台图。<br>转发上千。这是你当站姐以来，第一次觉得这个身份干净。');
+        morningBrief();
+      }},
+      {label:"趁机休整一天",sub:"体力+20 · 风险-5 · 他不在，你才像个人",fn(){
+        addEnergy(20);addRisk(-5);
+        pushNarr('你睡到自然醒，去了趟超市，给自己做了顿热饭。<br><span class="hint">原来不蹲点的日子是这样的。这个念头闪过的瞬间，你有点害怕——你居然快忘了。</span>');
+        morningBrief();
+      }},
+    ]);
+  }},
+  // ==== 偶像侧：直播失言 ====
+  {w:2,cond:()=>S.day>=7&&!S.flags.slipDone,run(){
+    S.flags.slipDone=true;
+    S.market={mult:1.4,label:"全网吃瓜日",icon:"🍉",desc:"他直播失言上热搜，全圈流量暴涨"};
+    pushNarr('🎙️ 昨晚团播出大事了——队友问他「最想对私生说什么」，他沉默三秒，说了句：<br>「<span class="em">你们赢了。我现在出门前会先看车底。</span>」<br>直播间瞬间刷屏，切片满天飞，#'+esc(S.idol.name)+'看车底# 挂上热搜第一。<br><span class="hint">今天全圈流量暴涨，素材行情 +40%。</span>');
+    showChoices([
+      {label:"把你存的「跟车视角」切片卖给营销号",sub:"+¥1,200 · 风险+8 · 往热搜火上浇油",fn(){
+        addMoney(1200);addRisk(8);addChenlun(6);S.evidence++;
+        pushNarr('营销号秒收，标题起得很脏：《私生视角还原：他为什么看车底》。<br>播放破百万。评论区一万条「私生去死」。<br><span class="hint">你提供的素材，成了证明他痛苦的证据。这笔钱烫手。</span>');
+        morningBrief();
+      }},
+      {label:"进超话帮控评",sub:"知名度+3 · 群地位+3",fn(){
+        addFame(3);S.rep=Math.min(100,S.rep+3);S.repActed=true;addChenlun(-2);
+        pushNarr('你跟着大部队刷正面词条，举报恶意切片。凌晨两点，热搜词条从「看车底」变成了「心疼'+esc(S.idol.name)+'」。<br><span class="hint">控评的时候没人知道，你就是他要看车底的原因之一。</span>');
+        morningBrief();
+      }},
+      {label:"关掉手机，那句话在你脑子里转",sub:"沉沦-5",fn(){
+        addChenlun(-5);
+        pushNarr('「我现在出门前会先看车底。」<br>你想起自己给公司车装 GPS 那天的手感。想起每一次跟车时他车窗里的侧影。<br><span class="hint">他说的「你们」，包括你。明明白白地包括你。</span>');
+        morningBrief();
+      }},
+    ]);
+  }},
+  // ==== 偶像侧：舞台受伤 ====
+  {w:2,cond:()=>phaseOf(S.day).phase==="comeback"&&!S.flags.injDone&&S.day>=6,run(){
+    S.flags.injDone=true;
+    pushNarr('🩹 昨晚公演出事了——高难度走位接旋转，他落地踩空，<span class="warn">整个人摔在升降台边缘</span>。音乐没停，他撑着站起来跳完了最后一分钟，下台时是被搀走的。<br>今早官方轻描淡写：「轻微扭伤，无大碍。」但你知道今天他还有行程。');
+    showChoices([
+      {label:"去蹲他「带伤营业」",sub:"沉沦+6 · 这种图最有「故事感」",fn(){
+        addChenlun(6);addRisk(6);addEnergy(-25);
+        gainItem(4,"带伤营业实录","护踝、止痛喷雾、上车前的一个趔趄");
+        pushNarr('你拍到了他上车前那个没站稳的趔趄，和助理伸手去扶时他摆手拒绝的瞬间。<br><span class="hint">这组图会爆。「敬业」「心疼」会刷满评论区——而他的脚踝，会继续肿着完成今天全部行程。</span>');
+        morningBrief();
+      }},
+      {label:"放下相机，今天不去了",sub:"沉沦-6 · 他需要的不是镜头",fn(){
+        addChenlun(-6);
+        pushNarr('你想象了一下那个画面：他忍着痛走向车，几十个镜头怼着他的脚踝连拍。<br>你不想成为其中之一。今天不想。<br><span class="hint">你给粉群发了句「今天别堵了，让他赶紧上车休息」。居然有人回了「+1」。</span>');
+        morningBrief();
+      }},
+    ]);
+  }},
+  // ==== NPC：跟丢了又来·真相 ====
+  {w:3,cond:()=>S.day>=25&&!S.npc.lostDone&&(S.npc.lost!==0||S.npc.lostSaved),run(){
+    S.npc.lostDone=true;
+    const saved=S.npc.lostSaved;
+    pushNarr('🧢 「跟丢了又来」退群了。<br>没有告别。但两小时后，群里有人甩出一张LinkedIn截图：<span class="warn">她的头像，挂在时代峰峻「艺人安全组 · 风控专员」的工位介绍里。</span><br>群炸了。原来那个永远在问「明天去哪蹲」的萌新，是公司派进来的眼睛。<br>'
+      +(saved
+        ?'<span class="em">你忽然懂了那晚的私聊——「就当我还你人情。」</span><br><span class="hint">公司的卧底，私下捞了你一把。你们之间那点说不清的交情，居然是真的。</span>'
+        :(S.npc.lost>=2
+          ?'<span class="warn">你的胃沉了下去——你亲口告诉过她你的蹲点安排。每一次。</span><br><span class="hint">公司档案里那份关于「'+esc(S.alias)+'」的记录，大概比你自己的日记还详细。</span>'
+          :'<span class="hint">还好。你从来没跟她交过底。直觉这东西，有时候真能救命。</span>')));
+    if(!saved&&S.npc.lost>=2)addRisk(10);
+    if(saved)addRisk(-3);
+    morningBrief();
   }},
   // ---- 反窥专用小马甲 ----
   {w:2,cond:()=>S.day>=7&&(S.fame>=20||S.risk>=35)&&!S.flags.fwDone,run(){
@@ -950,6 +1108,12 @@ function genIntel(){
   // 行程黑产被严打期间：收费线报涨价 50%
   if(S.intelSurgeUntil&&S.day<=S.intelSurgeUntil){
     for(const it of S.intel){if(!it.bought&&it.cost){it.cost=Math.round(it.cost*1.5/10)*10;it.src="（严打期渠道紧张 ¥"+it.cost+"，准度高）";}}
+  }
+  // 被踢出群：免费瓜全断（演唱会官宣行程除外）
+  if(S.kicked)S.intel=S.intel.filter(it=>it.cost>0||it.type==="concert");
+  // 群内大佬：收费线报八折
+  if(S.rep>=70){
+    for(const it of S.intel){if(!it.bought&&it.cost){it.cost=Math.round(it.cost*0.8/10)*10;it.src="（群内熟人价 ¥"+it.cost+"，准度高）";}}
   }
   // GPS 定位器：期间所有情报为真且免费
   if(S.gpsUntil&&S.day<=S.gpsUntil){
@@ -1133,6 +1297,55 @@ function postFaceEscalate(){
 // ===================================================
 //                     ACTIONS
 // ===================================================
+
+// ---- 行动中突发（蹲点过程里的小型抉择） ----
+function maybeMid(place,next){
+  if(!chance(0.22))return next();
+  const r=Math.random();
+  if(r<0.34){
+    pushNarr('🛂 刚在'+place+'落脚就出事了——<span class="warn">两名安保径直朝你走来：「包打开看一下。」</span>周围的目光齐刷刷聚了过来。');
+    showChoices([
+      {label:"配合检查，赔笑装路人",sub:"风险+2 · 有惊无险",fn(){
+        addRisk(2);
+        pushNarr('你心跳如鼓地看着他翻完整个包。长焦掏出来的时候他挑了下眉，最后还是放行了：「别在这儿逗留。」');
+        next();
+      }},
+      {label:"「我赶时间」转身就走",sub:"五五开 · 被追上就难看了",fn(){
+        if(chance(0.5)){pushNarr('你头也不回地汇入人流，身后没有脚步声——赌赢了。绕了一圈，你从另一侧回到了点位。');}
+        else{addRisk(8);const lvUp=addImp(1);pushNarr('<span class="warn">「站住！」</span>你被追上登记了证件信息。这下整个安保组都认得你了。');if(lvUp)impCrossNarr(lvUp);}
+        next();
+      }},
+    ]);
+  }else if(r<0.67){
+    pushNarr('📐 你提前两小时占好的机位，被一个生面孔直接把梯子架在了前面，炮口比你高出半米。<br>「这位置有人。」你说。她头也不回：「<span class="warn">写你名字了？</span>」');
+    showChoices([
+      {label:"寸步不让，怼回去",sub:"风险+3 · 圈里混的就是气势",fn(){
+        addRisk(3);addFame(2);
+        pushNarr('你们用只有这个圈子听得懂的黑话互呛了三分钟，最后她骂骂咧咧把梯子挪开了半米。<br><span class="hint">周围有人小声说：那是「'+esc(S.alias)+'」，别惹。</span>');
+        next();
+      }},
+      {label:"让她。和气生财",sub:"群地位+3 · 但今天的角度差点意思",fn(){
+        S.rep=Math.min(100,S.rep+3);S.todayPenalty=true;
+        pushNarr('你默默把三脚架往旁边挪了一米。她愣了一下，回头看了你一眼。<br>收工时她主动加了你好友：「姐，你人不错。」<span class="hint">圈子很小，人情很贵。</span>');
+        next();
+      }},
+    ]);
+  }else{
+    pushNarr('⚡ 突发——<span class="warn">他的队友提前出来了</span>，没有任何预告，两个人说笑着快步走向商务车。<br><span class="em">机会窗口只有四秒。</span>');
+    showChoices([
+      {label:"抬手就拍",sub:"团粉收这个",fn(){
+        addRisk(4);gainItem(2,"队友突发抓拍","糊是糊了点，但时机无价");
+        pushNarr('快门连响四声。车门关上的瞬间你才呼出那口气——正主还没出来，今天的好戏在后头。');
+        next();
+      }},
+      {label:"按兵不动，只等他",sub:"唯粉的修养",fn(){
+        addChenlun(2);
+        pushNarr('你的镜头纹丝不动。同行们一阵骚动后又安静下来。<br><span class="hint">你只为一个人来。这种偏执，你管它叫忠诚。</span>');
+        next();
+      }},
+    ],{seconds:4,timeoutIndex:1});
+  }
+}
 
 // ---- 跟机（出发日，开启远征） ----
 function actFlight(intel){
@@ -1401,6 +1614,7 @@ function actHotel(intel){
     save(); return endDay();
   }
   insertBeat();
+  maybeMid("酒店外围",()=>{
   pushNarr('情报是真的。晚上九点四十，保姆车滑进酒店地库，几分钟后大堂电梯间的灯亮了。<br>你坐在大堂咖啡厅的角落，面前的拿铁已经凉了。');
   showChoices([
     {label:"就在大堂守着，等他下来买夜宵",sub:"风险可控",fn(){
@@ -1449,6 +1663,7 @@ function actHotel(intel){
       finHotel();
     }},
   ]);
+  });
 }
 function finHotel(){
   if(postFaceEscalate())return;
@@ -1475,6 +1690,7 @@ function actStudio(intel){
     return afterAction(deltaLine(['<span class="down">-¥200 · 体力 -40</span>','<span class="hint">扑空</span>']));
   }
   insertBeat();
+  maybeMid(isPractice?"公司楼下":"录制基地",()=>{
   pushNarr(isPractice?pick([
     '公司楼下的咖啡店是个完美据点。晚上十一点二十，练习室的灯灭了，楼下陆续有人出来。',
     '你到的时候公司楼下已经停着两台熟悉的私生车。大家心照不宣地各占一角，等那扇门开。'
@@ -1532,6 +1748,7 @@ function actStudio(intel){
       finStudio();
     }},
   ]);
+  });
 }
 function finStudio(){
   if(postFaceEscalate())return;
@@ -1550,6 +1767,7 @@ function actShow(intel){
     return afterAction(deltaLine(['<span class="down">-¥150 · 体力 -35</span>','<span class="hint">扑空</span>']));
   }
   insertBeat();
+  maybeMid("剧场后巷",()=>{
   pushNarr('剧场艺人通道外已经排开了一排炮筒。新歌期的他状态拉满——新发色、舞台妆、整条后巷被应援色堵成了节日。黄牛在人群外围喊：「公演票！内场公演票！」');
   showChoices([
     {label:"蹲上下班路，稳定出双份",sub:"常规操作",fn(){
@@ -1586,6 +1804,7 @@ function actShow(intel){
       finShow();
     }},
   ]);
+  });
 }
 function finShow(){
   if(postFaceEscalate())return;
@@ -1723,14 +1942,23 @@ function actRest(){
 //                  被挂 / 当面事件
 // ===================================================
 function guaEvent(){
+  // 「跟丢了又来」好感高：提前给你递了消息，躲过一劫
+  if(S.npc&&S.npc.lost>=4&&!S.npc.lostSaved){
+    S.npc.lostSaved=true;
+    addRisk(-10);
+    pushNarr('🧢 凌晨两点，「跟丢了又来」突然私聊你：<br>「姐，<span class="warn">明天别出门，也别发任何东西。</span>别问为什么。」<br>你追问，她只回了一句：「就当我还你人情。」然后头像变灰了。<br><span class="hint">第二天，超话上挂出了一篇没有点名的扒皮预告帖。你一整天没冒头，帖子最后转向了别人。</span><br><span class="warn">她到底是谁？她怎么会提前知道？</span>');
+    morningBrief();
+    return;
+  }
   S.flags.guaActive=true;
   markDot("feed");
   S.feedPosts.unshift({gua:true,name:"圈内bot",time:"刚刚",body:"挂个人。代号「"+S.alias+"」的所谓大站，跟机、蹲酒店、卖私下行程样样都来。这种人渣是真把私生当事业了？姐妹们避雷，证据图见评论区。",meta:["转发 2.3万","评论 8941","赞 5.6万"]});
-  pushNarr('<span class="warn">🔥 你被挂了。</span><br>一觉醒来，你的代号挂在超话第一。配图是你的背影、你的设备、你蹲过的每一个机位。评论区已经盖起了高楼，有人开始顺着蛛丝马迹扒你的真实身份。');
+  pushNarr('<span class="warn">🔥 你被挂了。</span><br>一觉醒来，你的代号挂在超话第一。配图是你的背影、你的设备、你蹲过的每一个机位。评论区已经盖起了高楼，有人开始顺着蛛丝马迹扒你的真实身份。'
+    +(S.evidence>=3?'<br><span class="warn">最致命的是：帖子里贴着你在群里的聊天记录——你口述过的瓜、你出过的图、你说过的每一句话，全被截了图。</span>':''));
   showChoices([
     {label:"花钱找公关压帖",sub:"-¥2000 · 风险-10 · 但你知道这条路通向哪里",disabled:S.money<2000,fn(){
       addMoney(-2000); addChenlun(10);
-      if(S.fame>=80&&chance(0.4)){
+      if((S.fame>=80||S.evidence>=3)&&chance(Math.min(0.75,0.4+S.evidence*0.06))){
         pushNarr('<span class="warn">公关失手了。</span>删帖记录反而被截图挂了出来——「人证物证俱在，还有钱删帖，这下实锤了吧？」你的真名出现在了帖子里。');
         return ending("be_shesi");
       }
@@ -1781,6 +2009,127 @@ function afterFace(){
 //              晚间突发事件（大瓜 / 离奇）
 // ===================================================
 const EVE_EVENTS=[
+  // ==== 连锁链：徒弟线（流泪猫猫头）====
+  {id:"disc1",w:3,minDay:8,cond:()=>S.chain.disciple===0,run(){
+    pushNarr('🌙 「流泪猫猫头」深夜私聊你：<br>「姐姐！我看你的图看了半年了，今天终于鼓起勇气——<b>能收我当徒弟吗？</b>我想学跟行程、学卡机位，我什么都肯干！」<br>头像是个高中生模样的女孩，主页全是给你修的图。');
+    showChoices([
+      {label:"收下她",sub:"圈子又多了一个你",fn(){
+        S.chain.disciple=1;S.chain.discipleDay=S.day;S.npc.cat=3;
+        pushNarr('「叫师父。」你回了这两个字，她秒回了十个感叹号和一串哭脸。<br>你看着她兴奋的样子，像看见几年前的自己。<br><span class="hint">那时候也有人这样带你入行。现在想想，你不知道该谢她，还是恨她。</span>');
+        nightOffer();
+      }},
+      {label:"「这行别进来。听我的」",sub:"沉沦-5 · 你拦了一把",fn(){
+        S.chain.disciple=-1;addChenlun(-5);
+        pushNarr('你打了很长一段话：熬夜、烧钱、被骂、被挂、被他厌恶……发出去之前删了，最后只回了一句：<br>「<b>去看演唱会，去买专辑，别学我。</b>」<br>她回了个「哦」。你知道她不会听。<span class="hint">但至少不是你带她下的水。</span>');
+        nightOffer();
+      }},
+    ]);
+  }},
+  {id:"disc2",w:9,minDay:1,cond:()=>S.chain.disciple===1&&S.day>=S.chain.discipleDay+3,run(){
+    pushNarr('🌙 凌晨，徒弟给你发来一张截图，配了三个发抖的表情：<br>「师父！我搞到了<span class="warn">他家小区的门禁卡</span>！群里姐姐带我去的，明天就能进去蹲电梯！是不是超厉害！」<br><span class="em">她在等你夸她。</span>');
+    showChoices([
+      {label:"骂醒她：把卡退回去",sub:"沉沦-6 · 当年没人这么拦过你",fn(){
+        S.chain.disciple=2;S.chain.discipleGood=true;S.chain.discipleDay=S.day;addChenlun(-6);
+        pushNarr('你打过去一通语音电话，骂了她二十分钟——从治安管理处罚法骂到「他看见你会怕」。<br>她在那头哭了：「可是群里姐姐都说……」<br>「<b>她们巴不得多个人垫背。卡，退回去。</b>」<br>挂电话前她小声说了句「知道了师父」。<span class="hint">你坐在黑暗里想：当年要是有人这么骂我就好了。</span>');
+        nightOffer();
+      }},
+      {label:"「注意安全，别被拍到脸」",sub:"沉沦+8 · 你成了「群里姐姐」",fn(){
+        S.chain.disciple=2;S.chain.discipleGood=false;S.chain.discipleDay=S.day;addChenlun(8);
+        pushNarr('你只回了句注意安全。她发来一排「师父最好了」。<br><span class="hint">你放下手机，忽然意识到自己刚才那句话和当年带你的人说的一字不差。<br>原来下水是会遗传的。</span>');
+        nightOffer();
+      }},
+      {label:"跟她一起去",sub:"沉沦+14 · 师徒「联名款」越界",fn(){
+        S.chain.disciple=2;S.chain.discipleGood=false;S.chain.discipleDay=S.day;addChenlun(14);addRisk(10);
+        gainItem(4,"小区电梯偷拍","他按楼层的手，和警惕扫视的眼神");
+        pushNarr('第二天你们真的进去了。电梯里他离你们不到一米，徒弟激动得发抖，你按住她的手完成了拍摄。<br>出小区的时候她崇拜地看着你：「师父你手好稳。」<br><span class="hint">你确实很稳。稳得不像第一次干这种事——因为这确实不是第一次。</span>');
+        nightOffer();
+      }},
+    ]);
+  }},
+  {id:"disc3",w:9,minDay:1,cond:()=>S.chain.disciple===2&&S.day>=S.chain.discipleDay+3,run(){
+    S.chain.disciple=3;
+    if(S.chain.discipleGood){
+      addChenlun(-8);addFame(2);
+      pushNarr('🌙 徒弟给你发来一封长长的私信：<br>「师父，我退坑了。那天你骂我之后我想了很久……我妈生日那天我在酒店外面蹲他，错过了全家的晚饭。我好像知道自己在变成什么样的人了。」<br>「最后一次叫你师父。<b>谢谢你当时拦住我。</b>」<br>附带一张她拍的、你在前排举相机的背影：「姐姐也要记得回头看看自己呀。」<br><span class="em">你盯着那张背影看了很久很久。</span>');
+      pushSys("徒弟退坑了 · 沉沦 -8 · 她最后那句话留在了你心里");
+    }else{
+      addRisk(15);S.evidence++;
+      pushNarr('🌙 坏消息是群里传开的：<span class="warn">徒弟被抓了。</span>在他家小区蹲电梯的第三天，物业带着警察堵在了消防通道。<br>更坏的消息在后面——做笔录的时候，她哭着把怎么入行、跟谁学的、群里谁教的，<span class="warn">全说了。</span><br>「她提到了一个代号，」消息里说，「<b>'+esc(S.alias)+'</b>。」<br><span class="hint">你教她卡位、教她跟车、陪她进过那部电梯。每一笔，现在都记在你名下。</span>');
+      pushSys("徒弟供出了你 · 风险 +15");
+    }
+    nightOffer();
+  }},
+  // ==== NPC：氧气罐头退坑 ====
+  {id:"oxybye",w:2,minDay:14,once:true,cond:()=>S.npc.oxy>=4,run(){
+    pushNarr('🌙 「氧气罐头」私聊你，这次没有哭腔：<br>「姐，我退坑了。下周艺考，我想考摄影系——<b>是真的喜欢拍东西，不是只喜欢拍他。</b>这是你那天安慰我时说的话，你还记得吗？」<br>「我的大白长焦用不上了。半价卖你，就当谢礼。」');
+    showChoices([
+      {label:"收下镜头（-¥1,500）",sub:S.gear?"已有装备 · 可转手赚差价":"装备升级 · 出图率提升",disabled:S.money<1500,fn(){
+        addMoney(-1500);
+        if(S.gear){addMoney(2800);pushNarr('你已经有长焦了，转手挂闲鱼卖了 ¥2,800。<br>赚差价的时候你有点愧疚，又安慰自己：这叫帮她快速回血。');}
+        else{S.gear=1;pushNarr('镜头到手，成色极新。她附了张纸条：「用它拍点真正想拍的东西吧。」<br><span class="hint">装备升级了。但那张纸条你看了三遍。</span>');}
+        addChenlun(-3);
+        pushSys("「氧气罐头」退坑 · 去考她的摄影系了");
+        nightOffer();
+      }},
+      {label:"不收。祝她艺考顺利",sub:"沉沦-5",fn(){
+        addChenlun(-5);
+        pushNarr('「镜头留着吧，考上了用得着。」你回。<br>她发来一个用力的拥抱表情：「姐，其实你也拍得很好。<b>别把天赋全喂给一个不认识你的人。</b>」<br><span class="hint">这句话像一根很细的针，扎进去的时候不疼，后劲很大。</span>');
+        nightOffer();
+      }},
+    ]);
+  }},
+  // ==== 温情：雨夜递伞 ====
+  {id:"umbrella",w:2,minDay:5,once:true,run(){
+    pushNarr('🌙 收工时下起了暴雨。艺人通道口，一个没抢到伞的小粉丝抱着灯牌缩在屋檐下，浑身湿透还在等。<br>保姆车都快开了，<span class="em">突然又停下。车窗降下来，他探出身，把自己的伞递了出去。</span><br>「快回家，别等了。」车窗升起，车走了。<br>小粉丝抱着那把伞，在雨里哭得站不住。');
+    showChoices([
+      {label:"拍下来发超话",sub:"知名度+5 · 这种糖全网都在等",fn(){
+        addFame(5);S.stationFans+=rnd(200,500);
+        gainItem(2,"雨夜递伞","车窗里伸出来的那把黑伞");
+        pushNarr('图发出去十分钟转发破万。「他真的会看见每一个粉丝」刷满评论区。<br><span class="hint">你看着数据上涨，心里某个角落酸酸的：他看得见屋檐下的她，看不见镜头后的你。<br>——也对。你从没想被他「看见」，你只想看他。是这样吗？</span>');
+        nightOffer();
+      }},
+      {label:"收起相机，只是看着",sub:"沉沦+6 · 这就是你陷进去的原因",fn(){
+        addChenlun(6);
+        pushNarr('你没有拍。<br>雨声里你忽然想起来，自己是为什么入的坑——三年前的那个打歌舞台，他对镜头外摔倒的应援队员说「慢慢来，我等你们」。<br><span class="hint">他一直是这样的人。这才是最要命的。<br>烂人只会让你失望，好人才能让你沉沦。</span>');
+        nightOffer();
+      }},
+    ]);
+  }},
+  // ==== 温情：对镜头比心 ----
+  {id:"heart",w:2,minDay:10,once:true,run(){
+    pushNarr('🌙 散场时人群涌动，你被挤到了路灯下面——头顶亮着，全场只有你的位置最显眼。<br>他上车前回身向粉丝挥手，目光扫过来，<span class="em">忽然对着你的方向，比了一个小小的心。</span><br>周围一片尖叫。你的快门停了。<br><span class="warn">他不知道镜头后面是谁。他只是对一个「举着相机风雨无阻的粉丝」比了个心。</span>');
+    showChoices([
+      {label:"「那是比给我的」",sub:"沉沦+10 · 你知道不是，但你需要它是",fn(){
+        addChenlun(10);
+        gainItem(3,"指尖比心直拍","对着你的镜头——只对着你的镜头");
+        pushNarr('你把那张图设成了手机壁纸、电脑壁纸、平板壁纸。<br>那晚你翻来覆去地想：他看到我了。他对我比了心。<br><span class="hint">理智在某个角落小声说：他是对镜头比的，谁举着都一样。<br>你把那个声音摁了下去。</span>');
+        nightOffer();
+      }},
+      {label:"「他对谁都这样」",sub:"沉沦-6 · 清醒是有代价的",fn(){
+        addChenlun(-6);
+        gainItem(3,"指尖比心直拍","给所有粉丝的，不是给你的");
+        pushNarr('你出图、修图、发图，全程冷静。配文写的是「他给大家的爱心」。<br><span class="hint">评论区一万个女孩说「啊啊啊他看我了」。你看着她们，像看见一万个还没掉进来的自己。</span>');
+        nightOffer();
+      }},
+    ]);
+  }},
+  // ==== 温情：安可哭了 ----
+  {id:"encore",w:6,minDay:1,once:true,cond:()=>phaseOf(S.day).phase==="concert",run(){
+    pushNarr('🌙 安可环节出事了——不是事故，是<span class="em">他哭了</span>。<br>唱到那首写给粉丝的歌，第二段主歌他突然破音，然后整个人蹲了下去。全场的应援声浪盖过了伴奏，几万人替他唱完了副歌。<br>他站起来鞠了一个很深很深的躬。你的长焦里，他的眼睛亮得吓人。');
+    showChoices([
+      {label:"按下快门",sub:"这一滴眼泪值很多钱 · 但你的手在抖",fn(){
+        gainItem(4,"安可泪目特写","几万人都看见他哭了，只有你拍清了那滴泪");
+        addChenlun(8);
+        pushNarr('你拍下来了。回家修图放大到 200% 的时候，你忽然哭得比他还凶。<br><span class="hint">你想起第一次看他演出的自己——那时候你两手空空，只带了一根荧光棒，哭得也是这么凶。<br>什么时候开始，你来看他必须带着「装备」了？</span>');
+        nightOffer();
+      }},
+      {label:"放下相机，跟全场一起唱",sub:"沉沦-10 · 这三分钟你只是个粉丝",fn(){
+        addChenlun(-10);
+        pushNarr('你放下了相机，跟着几万人一起唱完了那首歌。嗓子喊哑了，手电筒晃成一片星海。<br>那三分钟里你不是站姐、不是私生、不是产业链上的一环——<span class="em">你只是喜欢他的一个普通人。</span><br><span class="hint">散场的人潮里你忽然想：要是能一直只做这个，该多好。</span>');
+        nightOffer();
+      }},
+    ]);
+  }},
   // ---- 酒店退房打卡 ----
   {id:"hotelroom",w:2,minDay:8,once:true,run(){
     pushNarr('🌙 收工路上，小群里炸出一条消息：<br>「他们今天退房了，<b>1208</b>，保洁还没上去，门禁有个漏洞……」<br>配图是酒店走廊。已经有两个 ID 回了「在路上」。<br><span class="warn">圈里管这个叫「打卡」——进他刚住过的房间。</span>');
@@ -1958,8 +2307,8 @@ const EVE_EVENTS=[
         pushNarr('你的手稳得可怕。直到他们被各自拉走，你才发现自己憋了一分多钟没呼吸。<br><span class="hint">这段视频在圈子里的价格，你不敢想。</span>');
         nightOffer();
       }},
-      {label:"语音发到粉群口述吃瓜",sub:"知名度+6 · 群里炸锅",fn(){
-        addFame(6); addRisk(4);
+      {label:"语音发到粉群口述吃瓜",sub:"知名度+6 · 群里炸锅 · 语音是会留底的",fn(){
+        addFame(6); addRisk(4); S.evidence++; S.rep=Math.min(100,S.rep+5); S.repActed=true;
         pushNarr('「家人们我在现场，刚才侧门……」你的60秒语音方阵刷爆了群。有人哭，有人骂你造谣，有人开始考古两人三个月没同框的物料。<br><span class="hint">天亮之前，#'+esc(S.idol.group)+'不和# 悄悄爬上了热搜尾巴。</span>');
         nightOffer();
       }},
@@ -2454,21 +2803,64 @@ function genGroupMsgs(){
   }
   S.groupMsgs=msgs;
   S.groupSpecials=[];
+  if(S.kicked)return;
   if(!S.away&&chance(0.6))S.groupSpecials.push({id:"carpool",name:pick(FAN_NAMES),done:false});
   if(S.day>=2&&chance(0.55))S.groupSpecials.push({id:"comm",name:pick(FAN_NAMES),done:false,lv:pick([2,2,2,3]),reward:rnd(4,9)*100});
+  // NPC 互动：氧气罐头（深夜 emo）/ 跟丢了又来（打探你的行程）
+  if(S.day>=3&&!S.npc.oxyDone&&chance(0.3))S.groupSpecials.push({id:"npc_oxy",done:false});
+  if(S.day>=5&&!S.npc.lostDone&&chance(0.3))S.groupSpecials.push({id:"npc_lost",done:false});
   if(S.groupSpecials.length)markDot("group");
 }
+function repTier(){
+  return S.rep>=70?["👑 群内大佬","线报熟人价八折 · 收图单价+20%"]
+    :S.rep>=40?["🐟 活跃姐妹","正常待遇"]
+    :S.rep>=15?["💤 潜水党","再不冒泡就要被清理了"]
+    :["⚠️ 清理边缘","下次清群名单上有你"];
+}
 function renderGroup(sc){
+  // 被踢出群
+  if(S.kicked){
+    sc.innerHTML='<div class="sys">你已不在「'+esc(S.idol.name)+'唯爱小分队」中</div>'
+      +'<div class="card"><h4>📵 被移出群聊</h4><div class="statnote" style="border:none">潜水太久，清群的时候第一批就是你。免费线报渠道全断了。</div>'
+      +'<button class="btn primary" id="btn-rejoin" style="margin-top:10px;text-align:center">找老姐妹拉你回去（发 ¥200 红包开路）</button></div>';
+    sc.querySelector("#btn-rejoin").onclick=()=>{
+      if(S.money<200){pushSys("红包都发不起，先去挣钱吧");return;}
+      addMoney(-200); S.kicked=false; S.rep=30; S.repActed=true;
+      pushSys("你重新进群了。改名、换头像、发了个 ¥200 红包——「新人报道」");
+      save(); genGroupMsgs(); renderGroup(sc);
+    };
+    return;
+  }
+  const tier=repTier();
   let h='<div class="sys">「'+esc(S.idol.name)+'唯爱小分队」 · '+rnd(180,520)+' 人在线</div>';
+  h+='<div class="card" style="padding:10px 14px"><div class="statrow" style="border:none;padding:4px 0"><span class="k">你的群地位</span><span>'+tier[0]+'</span></div><div class="statnote" style="border:none;padding-bottom:0">'+tier[1]+'（潜水会掉，发图、互动会涨）'+(S.evidence>=3?'<br><span style="color:var(--red)">⚠ 你在群里留下过不少把柄，大家都记得。</span>':'')+'</div></div>';
+  // 分享素材进群
+  const shr=[...S.inventory].filter(x=>!x.shared&&!x.published).sort((a,b)=>b.id-a.id).slice(0,2);
+  if(shr.length){
+    h+='<div class="card"><h4>📤 群里在蹲今日图</h4><div class="statnote" style="border:none">分享进群：地位+8、知名度+1，但图就烂大街了（卖价打四折）</div>';
+    for(const it of shr){
+      h+='<div class="item" style="margin:6px 0"><div class="thumb">'+LV_INFO[it.lv].icon+'</div><div class="info"><div class="iname"><span class="lv'+it.lv+'">Lv'+it.lv+'</span> '+esc(it.name)+'</div></div><button class="sell" data-share="'+it.id+'">分享</button></div>';
+    }
+    h+='</div>';
+  }
   for(const sp of S.groupSpecials){
     if(sp.id==="carpool"){
       h+='<div class="chatmsg fade"><div class="avatar">🚗</div><div class="bubblewrap"><div class="chatname">'+esc(sp.name)+'</div><div class="bubble intel">今天出外勤的姐妹拼车吗？人均 ¥50，省一半路费'
         +(sp.done?'<br><span style="color:var(--green);font-size:12px">✓ 已拼上（今天第一次外勤花费减半）</span>'
         :'<br><button class="sell" data-gs="carpool" style="margin-top:6px">拼车 -¥50</button>')+'</div></div></div>';
     }else if(sp.id==="comm"){
-      h+='<div class="chatmsg fade"><div class="avatar">💰</div><div class="bubblewrap"><div class="chatname">'+esc(sp.name)+'</div><div class="bubble intel">收今天的图！Lv'+sp.lv+' 以上就行，秒结 ¥'+fmt(sp.reward)+'，发副本不影响你出原图'
+      const rw=S.rep>=70?Math.round(sp.reward*1.2/10)*10:sp.reward;
+      h+='<div class="chatmsg fade"><div class="avatar">💰</div><div class="bubblewrap"><div class="chatname">'+esc(sp.name)+'</div><div class="bubble intel">收今天的图！Lv'+sp.lv+' 以上就行，秒结 ¥'+fmt(rw)+(S.rep>=70?"（大佬加价了）":"")+'，发副本不影响你出原图'
         +(sp.done?'<br><span style="color:var(--green);font-size:12px">✓ 已接单（今天拍到 Lv'+sp.lv+'+ 素材自动结款）</span>'
         :'<br><button class="sell" data-gs="comm" style="margin-top:6px">接单</button>')+'</div></div></div>';
+    }else if(sp.id==="npc_oxy"){
+      h+='<div class="chatmsg fade"><div class="avatar">🫧</div><div class="bubblewrap"><div class="chatname">氧气罐头</div><div class="bubble">姐妹们……我妈刚把我相机摔了，说我「为个不认识的人疯成这样」。我蹲在楼道里，忽然不知道自己这两年图什么 [大哭]'
+        +(sp.done?'<br><span style="color:var(--green);font-size:12px">✓ 已回复</span>'
+        :'<br><div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><button class="sell" data-gs="oxy_warm">安慰她</button><button class="sell" data-gs="oxy_real">「想退就退吧」</button><button class="sell" data-gs="oxy_skip">划过</button></div>')+'</div></div></div>';
+    }else if(sp.id==="npc_lost"){
+      h+='<div class="chatmsg fade"><div class="avatar">🧢</div><div class="bubblewrap"><div class="chatname">跟丢了又来</div><div class="bubble">'+esc(S.alias)+' 姐在吗？想请教下，你明天准备去哪边蹲？我想跟你学学卡位 [星星眼]'
+        +(sp.done?'<br><span style="color:var(--green);font-size:12px">✓ 已回复</span>'
+        :'<br><div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><button class="sell" data-gs="lost_tell">如实相告</button><button class="sell" data-gs="lost_vague">打个哈哈</button><button class="sell" data-gs="lost_ask">反问她是谁</button></div>')+'</div></div></div>';
     }
   }
   for(const m of S.groupMsgs){
@@ -2476,16 +2868,42 @@ function renderGroup(sc){
   }
   h+='<div class="sys">潜水太久会被踢哦</div>';
   sc.innerHTML=h;
+  sc.querySelectorAll("[data-share]").forEach(b=>{
+    b.onclick=()=>{
+      const it=S.inventory.find(x=>x.id===+b.dataset.share); if(!it||it.shared)return;
+      it.shared=true; S.rep=Math.min(100,S.rep+8); S.repActed=true; addFame(1);
+      if(it.lv>=4){S.evidence++;pushSys("你把「"+it.name+"」发进了群。群里炸了，地位+8——但 Lv4 的东西发出去，就是留了把柄");}
+      else pushSys("你把「"+it.name+"」发进了群，姐妹们刷了一排「太太辛苦了」。地位+8");
+      save(); renderGroup(sc);
+    };
+  });
   sc.querySelectorAll("[data-gs]").forEach(b=>{
     b.onclick=()=>{
-      const sp=S.groupSpecials.find(x=>x.id===b.dataset.gs); if(!sp||sp.done)return;
-      if(sp.id==="carpool"){
-        if(S.money<50)return;
-        addMoney(-50); S.carpoolDay=S.day; sp.done=true;
-        pushSys("拼车成功：今天第一次外勤花费减半");
-      }else{
-        S.commission={lv:sp.lv,reward:sp.reward,day:S.day,done:false}; sp.done=true;
-        pushSys("已接单：今天拍到 Lv"+sp.lv+"+ 素材，自动结款 ¥"+fmt(sp.reward));
+      const k=b.dataset.gs;
+      if(k==="carpool"||k==="comm"){
+        const sp=S.groupSpecials.find(x=>x.id===k); if(!sp||sp.done)return;
+        if(k==="carpool"){
+          if(S.money<50)return;
+          addMoney(-50); S.carpoolDay=S.day; sp.done=true; S.rep=Math.min(100,S.rep+2); S.repActed=true;
+          pushSys("拼车成功：今天第一次外勤花费减半");
+        }else{
+          const rw=S.rep>=70?Math.round(sp.reward*1.2/10)*10:sp.reward;
+          S.commission={lv:sp.lv,reward:rw,day:S.day,done:false}; sp.done=true; S.rep=Math.min(100,S.rep+2); S.repActed=true;
+          pushSys("已接单：今天拍到 Lv"+sp.lv+"+ 素材，自动结款 ¥"+fmt(rw));
+        }
+      }else if(k.startsWith("oxy_")){
+        const sp=S.groupSpecials.find(x=>x.id==="npc_oxy"); if(!sp||sp.done)return;
+        sp.done=true; S.npc.oxyDone=true; S.repActed=true;
+        if(k==="oxy_warm"){S.npc.oxy+=3;S.rep=Math.min(100,S.rep+3);addChenlun(-1);pushSys("你私聊安慰了她半小时。最后她说：「还好有你。」");}
+        else if(k==="oxy_real"){S.npc.oxy+=2;addChenlun(-3);pushSys("你说：「想退就退吧，没什么丢人的。」她沉默了很久，回了一个「嗯」");}
+        else pushSys("你划过了那条消息。楼道里的人，谁没蹲过呢");
+        S.npc.oxyDone=false; // 可多次互动累积
+      }else if(k.startsWith("lost_")){
+        const sp=S.groupSpecials.find(x=>x.id==="npc_lost"); if(!sp||sp.done)return;
+        sp.done=true; S.repActed=true;
+        if(k==="lost_tell"){S.npc.lost+=2;S.evidence++;S.rep=Math.min(100,S.rep+2);pushSys("你把明天的安排告诉了她。她回得飞快：「收到收到！」——快得有点奇怪");}
+        else if(k==="lost_vague"){S.npc.lost-=1;pushSys("你打了个哈哈糊弄过去。她发了个「好叭」，没再追问");}
+        else{addRisk(-1);pushSys("你反问她是哪家的。她隔了十分钟才回：「我是新来的呀」——主页干净得像刚注册的");}
       }
       save(); renderGroup(sc);
     };
@@ -2495,6 +2913,24 @@ function renderGroup(sc){
 function genFeed(){
   const posts=S.feedPosts.filter(p=>p.gua).slice(0,1);
   const ph=phaseOf(S.day).phase;
+  // 同行雷达：偶尔有同行实图，佐证一条真线报
+  const unb=S.intel.filter(it=>!it.bought&&it.real);
+  if(unb.length&&chance(0.35)){
+    const it=pick(unb);
+    it.src="（超话有同行先头图佐证，基本实锤）";
+    posts.push({name:"同行雷达",icon:"📡",time:"刚刚",body:"已有站姐在相关位置出图——「"+it.title+"」这条线，今天大概率是真的。",meta:["转发 "+rnd(50,800),"评论 "+rnd(20,300)],radar:true});
+  }
+  // 行踪暴露警告
+  if(S.risk>=25&&chance(0.15)){
+    addRisk(3);
+    posts.push({name:"圈内闲话",icon:"👀",time:rnd(1,3)+"小时前",body:"悄悄问一句：最近总在前排出现的那个黑色双肩包姐姐是谁？看着不像普通站子……",meta:["转发 "+rnd(300,2000),"评论 "+rnd(100,900)],warn:true});
+  }
+  // 可跟进热帖（每天最多一个）
+  if(!S.feedAct&&chance(0.45)){
+    S.feedAct=chance(0.5)
+      ?{id:"antiblack",done:false}
+      :{id:"sasaeng",done:false};
+  }
   const pool=[
     {name:"官方账号",body:S.idol.group+" 新物料上线，"+S.idol.name+" 个人 teaser 播放量破纪录！",icon:"⭐"},
     {name:"前线速报",body:"今日路透：黑色外套+渔夫帽，"+S.idol.name+"的私服审美还是稳",icon:"📡"},
@@ -2510,12 +2946,82 @@ function genFeed(){
   for(let i=0;i<n;i++){const p=pick(pool);posts.push({name:p.name,icon:p.icon,time:rnd(1,9)+"小时前",body:p.body,meta:["转发 "+rnd(100,9000),"评论 "+rnd(50,4000),"赞 "+rnd(500,30000)]});}
   S.feedPosts=posts;
 }
+function publishStation(id){
+  const it=S.inventory.find(x=>x.id===id); if(!it||it.published)return;
+  it.published=true;
+  const gain=it.lv*it.lv*rnd(25,60);
+  const oldFans=S.stationFans;
+  S.stationFans+=gain;
+  addFame(it.lv>=4?7:it.lv>=3?4:2);
+  let msg="超话发布「"+it.name+"」：站子涨粉 "+fmt(gain)+"（该图不再独家，卖价减半）";
+  if(it.lv>=4){
+    addRisk(10); S.evidence++;
+    msg+=" · 非公开素材引爆全网，公司的人来你主页逛过了（风险+10）";
+  }
+  pushSys(msg);
+  // 涨粉里程碑：商务约稿
+  for(const t of [1000,3000,8000]){
+    if(oldFans<t&&S.stationFans>=t){
+      const r=t===1000?800:t===3000?2000:5000;
+      addMoney(r);
+      pushSys("🎉 站子粉丝破 "+fmt(t)+"！品牌物料组找你约稿，结款 ¥"+fmt(r));
+    }
+  }
+  save(); renderFeed($("#screen"));
+}
 function renderFeed(sc){
+  const mk2=S.market||{mult:1,icon:"〰️",label:"行情平稳",desc:"图价正常"};
   let h='<div class="sys">#'+esc(S.idol.name)+'# 超话 · 阅读 '+(rnd(2,9)/10)+'亿</div>';
+  h+='<div class="card" style="padding:10px 14px"><div class="statrow" style="border:none;padding:4px 0"><span class="k">'+mk2.icon+' 今日行情 · '+esc(mk2.label)+'</span><span style="color:'+(mk2.mult>1?'var(--gold)':mk2.mult<1?'var(--txt3)':'var(--txt2)')+'">'+(mk2.mult>1?"+":"")+Math.round((mk2.mult-1)*100)+'%</span></div><div class="statnote" style="border:none;padding-bottom:0">'+esc(mk2.desc)+'</div></div>';
+  // 你的站子
+  const pub=[...S.inventory].filter(x=>!x.published&&!x.shared).sort((a,b)=>b.id-a.id).slice(0,2);
+  h+='<div class="card"><h4>📷 你的站子「'+esc(S.alias)+'」 · 粉丝 '+fmt(S.stationFans)+'</h4>';
+  if(pub.length){
+    h+='<div class="statnote" style="border:none">发布素材涨粉涨知名度，但图就不再独家了（卖价减半）。Lv4+ 会引爆全网，也会引来公司。</div>';
+    for(const it of pub){
+      h+='<div class="item" style="margin:6px 0"><div class="thumb">'+LV_INFO[it.lv].icon+'</div><div class="info"><div class="iname"><span class="lv'+it.lv+'">Lv'+it.lv+'</span> '+esc(it.name)+'</div></div><button class="sell" data-pub="'+it.id+'">发布</button></div>';
+    }
+  }else{
+    h+='<div class="statnote" style="border:none">没有可发布的素材。出门拍点东西回来吧——站子三天不更新，粉丝就跑了。</div>';
+  }
+  h+='</div>';
+  // 可跟进热帖
+  if(S.feedAct&&!S.feedAct.done){
+    if(S.feedAct.id==="antiblack"){
+      h+='<div class="post gua fade"><div class="ph"><div class="avatar">🖤</div><div class="pname">对家茶话会</div><div class="ptime">2小时前</div></div><div class="pbody">路人真心提问：'+esc(S.idol.name)+'是不是真的没实力全靠包装？跳舞划水营业假笑，理三连里全是黑料（doge）</div><div class="pmeta"><span>转发 1.2万</span><span>评论 8742</span></div>'
+        +'<div style="display:flex;gap:8px;padding:8px 12px 12px"><button class="sell" data-fa="money">出钱反黑 -¥500</button><button class="sell" data-fa="pic">用素材辟谣</button><button class="sell" data-fa="watch">看戏</button></div></div>';
+    }else{
+      h+='<div class="post gua fade"><div class="ph"><div class="avatar">⚖️</div><div class="pname">圈内法庭</div><div class="ptime">5小时前</div></div><div class="pbody">挂个私生：连续半个月蹲守酒店、跟车进小区，'+esc(S.idol.name)+'的助理都认识她了。这种人渣什么时候管管？（评论区有图）</div><div class="pmeta"><span>转发 3.4万</span><span>评论 1.9万</span></div>'
+        +'<div style="display:flex;gap:8px;padding:8px 12px 12px"><button class="sell" data-fa="scold">跟着骂</button><button class="sell" data-fa="silent">沉默划走</button></div></div>';
+    }
+  }
   for(const p of S.feedPosts){
-    h+='<div class="post'+(p.gua?" gua":"")+' fade"><div class="ph"><div class="avatar">'+(p.icon||"🚨")+'</div><div class="pname">'+esc(p.name)+'</div><div class="ptime">'+esc(p.time||"刚刚")+'</div></div><div class="pbody">'+esc(p.body)+'</div><div class="pmeta">'+(p.meta||[]).map(esc).map(x=>"<span>"+x+"</span>").join("")+'</div></div>';
+    h+='<div class="post'+(p.gua?" gua":"")+' fade"'+(p.warn?' style="border-color:var(--red)"':'')+'><div class="ph"><div class="avatar">'+(p.icon||"🚨")+'</div><div class="pname">'+esc(p.name)+'</div><div class="ptime">'+esc(p.time||"刚刚")+'</div></div><div class="pbody">'+esc(p.body)+'</div><div class="pmeta">'+(p.meta||[]).map(esc).map(x=>"<span>"+x+"</span>").join("")+'</div></div>';
   }
   sc.innerHTML=h;
+  sc.querySelectorAll("[data-pub]").forEach(b=>{b.onclick=()=>publishStation(+b.dataset.pub);});
+  sc.querySelectorAll("[data-fa]").forEach(b=>{
+    b.onclick=()=>{
+      const a=b.dataset.fa; if(!S.feedAct||S.feedAct.done)return;
+      S.feedAct.done=true;
+      if(a==="money"){
+        if(S.money<500){S.feedAct.done=false;return;}
+        addMoney(-500);addFame(4);pushSys("你给反黑组捐了 ¥500，黑帖两小时后被举报下沉");
+      }else if(a==="pic"){
+        const it=[...S.inventory].filter(x=>x.lv>=2&&!x.published).sort((a2,b2)=>b2.id-a2.id)[0];
+        if(!it){S.feedAct.done=false;pushSys("手里没有能用的素材（需 Lv2+ 未发布）");return;}
+        it.published=true;addFame(8);S.stationFans+=rnd(100,300);
+        pushSys("你甩出「"+it.name+"」直接打脸：「划水？自己看图。」高赞第一，站子涨粉（该图不再独家）");
+      }else if(a==="watch"){
+        addChenlun(2);pushSys("你嗑着瓜子看完了三千层楼。没人知道前排那个蹲到他真实状态的人就是你");
+      }else if(a==="scold"){
+        addChenlun(5);pushSys("你跟着骂了一句「私生去死」。发送成功的瞬间，你的手指有点凉");
+      }else{
+        addChenlun(-2);pushSys("你沉默地划过了那条帖子。帖子里的每一条罪状，你都做过");
+      }
+      save(); renderFeed(sc);
+    };
+  });
 }
 
 function renderAlbum(sc){
@@ -2527,7 +3033,8 @@ function renderAlbum(sc){
     if(S.flags.secretDone)h+='<div class="narr" style="font-size:13.5px"><span class="em">真相：'+esc(sec.ending)+'</span></div>';
     h+="</div>";
   }
-  const buff=phaseOf(S.day).phase==="comeback"?'<div class="sys" style="color:var(--gold)">🔥 新歌期行情：全部素材溢价 30%</div>':"";
+  const mk2=S.market||{mult:1};
+  const buff=mk2.mult!==1?'<div class="sys" style="color:'+(mk2.mult>1?'var(--gold)':'var(--txt3)')+'">'+mk2.icon+' '+mk2.label+'：'+mk2.desc+'</div>':"";
   h+=buff+'<div class="sys">素材库 · 卖出 4 级以上素材会有代价</div>';
   if(!S.inventory.length)h+='<div class="sys" style="margin-top:30px">空空如也。去蹲点吧。</div>';
   for(const it of [...S.inventory].reverse()){
@@ -2544,7 +3051,7 @@ function sellItem(id){
   const price=itemPrice(it);
   addMoney(price); addFame(it.lv>=4?8:it.lv===3?3:1);
   let extra="";
-  if(it.lv>=4){addChenlun(it.lv===5?12:6);addRisk(5);S.flags.soldLv4++;extra="（这种货流通出去，迟早被溯源）";}
+  if(it.lv>=4){addChenlun(it.lv===5?12:6);addRisk(5);S.flags.soldLv4++;S.evidence++;extra="（这种货流通出去，迟早被溯源）";}
   else if(it.lv===3&&/行程|信息|房号/.test(it.name)){addChenlun(5);extra="（你成了行程产业链的一环）";}
   S.inventory=S.inventory.filter(x=>x.id!==id);
   save();
@@ -2612,8 +3119,21 @@ function renderMine(sc){
 // ===================================================
 //                     BOOT
 // ===================================================
+function migrate(s){
+  if(s.rep==null)s.rep=40;
+  if(s.repActed==null)s.repActed=false;
+  if(s.kicked==null)s.kicked=false;
+  if(s.stationFans==null)s.stationFans=rnd(150,400);
+  if(s.evidence==null)s.evidence=0;
+  if(!s.market)s.market={mult:1,label:"行情平稳",icon:"〰️",desc:"图价正常"};
+  if(s.marketForce===undefined)s.marketForce=null;
+  if(s.feedAct===undefined)s.feedAct=null;
+  if(!s.npc)s.npc={oxy:0,cat:0,lost:0,oxyDone:false,lostDone:false};
+  if(!s.chain)s.chain={inspect:0,inspectDay:0,cleaned:false,disciple:0,discipleDay:0,discipleGood:false};
+  return s;
+}
 function boot(state){
-  S=state;
+  S=migrate(state);
   $("#start").style.display="none";
   $("#statusbar").style.display="flex";
   $("#tabbar").style.display="flex";
